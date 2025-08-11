@@ -1,0 +1,9 @@
+# Method (comes with basis set)
+! wB97X-3c
+# Parallelize on 8 CPUs
+! PAL8
+# Optimize structure
+! opt
+
+# * xyzfile charge multiplicity {close shell = 1, radicals = 2 usually (O2 exception with 3)} filename.xyz
+* xyzfile 0 2 CH2CCC1CO1.xyz
