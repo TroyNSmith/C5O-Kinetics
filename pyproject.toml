@@ -22,9 +22,62 @@ rdkit = ">=2025.3.5,<2026"
 py3dmol = ">=2.5.2,<3"
 click = ">=8.2.1,<9"
 numpy = ">=2.3.2,<3"
+altair = ">=5.5.0,<6"
+pandas = ">=2.3.1,<3"
+pyparsing = ">=3.2.3,<4"
+networkx = ">=3.5,<4"
+autode = ">=1.4.5,<2"
+libgfortran = "14.*"
+xtb = "<6.7"
 
-[tool.pixi.tasks]
-extract = "./.scripts/extract.sh"
+[tool.pixi.tasks.extract]
+args = [
+    { "arg" = "workdir"},
+]
+cmd = "bash .scripts/extract.sh {{ workdir }}"
+
+[tool.pixi.tasks.writer]
+args = [
+    { "arg" = "smiles"},
+    { "arg" = "workflow"},
+]
+cmd = "python src/protopilot/orca.py {{ workflow }} -smi {{ smiles }}"
+
+[tool.pixi.tasks.run_opt]
+args = [
+    { "arg" = "workdir" },
+]
+cmd = "bash .scripts/run_opt.sh {{ workdir }}"
+
+[tool.pixi.tasks.run_scan]
+args = [
+    { "arg" = "workdir" },
+]
+cmd = "bash .scripts/run_scan.sh {{ workdir }}"
+
+[tool.pixi.tasks.energy]
+args = [
+    { "arg" = "workdir" },
+]
+cmd = "bash .scripts/read_energy.sh {{ workdir }}"
+
+[tool.pixi.tasks.find_opt]
+args = [
+    { "arg" = "workdir" },
+]
+cmd = "bash .scripts/find_opt.sh {{ workdir }}"
+
+[tool.pixi.tasks.find_scan]
+args = [
+    { "arg" = "workdir" },
+]
+cmd = "bash .scripts/find_scan.sh {{ workdir }}"
+
+[tool.pixi.tasks.runner]
+args = [
+    { "arg" = "path"},
+]
+cmd = "sbatch {{ path }}/submit.sh"
 
 [tool.ruff]
 line-length = 88
