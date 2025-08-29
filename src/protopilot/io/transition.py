@@ -16,6 +16,8 @@ def write_scan(
 ):
     par_dir = Path(intermediate_xyz.split("Optimization")[0])
     work_dir = par_dir / f"{scan_coordinates.replace(' ', '_')}/run"
+    if work_dir.exists():
+        raise FileExistsError(f"{work_dir} already exists.")
     work_dir.mkdir(parents=True, exist_ok=True)
     scan_dir = work_dir / "REVDSD_Scan"
     scan_dir.mkdir(parents=True, exist_ok=True)
@@ -44,26 +46,6 @@ def write_opt(
     multiplicity: int = 2,
 ):
     work_dir = Path(transition_xyz.split("REVDSD")[0])
-    # # --- XTB
-    # xtb_dir = work_dir / "XTB"
-    # xtb_dir.mkdir(parents=True, exist_ok=True)
-    # shutil.copy(Path(transition_xyz), xtb_dir / "Scan.xyz")
-    # xtb_job_opts = (
-    #     "# --- Run XTB and copy output\n"
-    #     "$(which orca) XTB.inp > XTB.log\n"
-    #     "cp XTB.xyz ../REVDSD/\n\n"
-    # )
-    # orca_input_and_sh(
-    #     method="XTB",
-    #     smiles=trans_smiles,
-    #     job_opts=xtb_job_opts,
-    #     charge=charge,
-    #     multiplicity=multiplicity,
-    #     output_dir=xtb_dir,
-    #     xyz_name="Scan",
-    #     job_type="opt_freq_ts",
-    # )
-    # --- REVDSD
 
     revdsd_dir = work_dir / "REVDSD"
     revdsd_dir.mkdir(parents=True, exist_ok=True)

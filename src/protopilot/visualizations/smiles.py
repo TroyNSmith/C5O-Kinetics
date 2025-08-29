@@ -1,6 +1,7 @@
 from IPython.display import display
+import py3Dmol
 from rdkit import Chem
-from rdkit.Chem import Draw
+from rdkit.Chem import AllChem, Draw
 
 
 def visualize_smiles(smiles: str):
@@ -13,14 +14,27 @@ def visualize_smiles(smiles: str):
     Returns:
     None: Displays the molecule image.
     """
-    mol = Chem.MolFromSmiles(smiles)
-    img = Draw.MolToImage(
-        mol,
-        molsPerRow=1,
-        subImgSize=(200, 200),
-    )
+    mol = Chem.AddHs(Chem.MolFromSmiles(smiles))
+    AllChem.EmbedMolecule(mol)
+    xyz_block = Chem.MolToXYZBlock(mol)
 
-    display(img)
+    viewer = py3Dmol.view(width=400, height=400)
+    viewer.addModel(xyz_block, "xyz")
+    viewer.setStyle({"stick": {}, "sphere": {"scale": 0.3}})
+    natoms = mol.GetNumAtoms()
+    for i in range(natoms):
+        viewer.addLabel(
+            i,
+            {
+                "backgroundOpacity": 0,
+                "fontColor": "blue",
+                "alignment": "center",
+                "inFront": True,
+            },
+            {"index": i},
+        )
+    viewer.zoomTo()
+    viewer.show()
 
 
 def visualize_b_cleavage(smiles: str):

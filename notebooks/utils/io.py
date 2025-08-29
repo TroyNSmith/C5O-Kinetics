@@ -1,17 +1,84 @@
 from rdkit import Chem
 from rdkit.Chem import AllChem, Descriptors
 
-import os
 from pathlib import Path
 import shutil
-import sys
 
-sys.path.append(str(Path.home() / "C5O-Kinetics"))
-
-from protopilot.io.utils import orca_input_and_sh
+from .writing import orca_input_and_sh
 
 
-def write(
+def get_xyz(smiles: str = "[CH]1CO1", method: str = "REVDSD"):
+    identifier = (
+        smiles.replace("[", "_")
+        .replace("]", "_")
+        .replace("(", "ch_")
+        .replace(")", "_hc")
+        .replace("=", "dbl")
+        .replace("#", "trpl")
+        .replace("/", "up")
+        .replace("\\", "dwn")
+    )
+    dir = Path.home() / f"C5O-Kinetics/calc/{identifier}/Optimization/run/{method}"
+    unique_files = {f.name: f for f in dir.rglob("*xyz")}
+    unique_files_list = [(name, f) for name, f in unique_files.items()]
+    return sorted(unique_files_list, key=lambda name: name[0])
+
+
+def get_transitions(smiles: str = "[CH]1CO1"):
+    identifier = (
+        smiles.replace("[", "_")
+        .replace("]", "_")
+        .replace("(", "ch_")
+        .replace(")", "_hc")
+        .replace("=", "dbl")
+        .replace("#", "trpl")
+        .replace("/", "up")
+        .replace("\\", "dwn")
+    )
+    dir = Path.home() / f"C5O-Kinetics/calc/{identifier}"
+    files = [(f.name, f) for f in dir.iterdir() if f.is_dir()]
+    return sorted(files, key=lambda name: name[0])
+
+
+def get_scan_xyzs(trans_dir: Path):
+    dir = trans_dir / "run/REVDSD_Scan"
+    files = [(str(f).split("REVDSD_Scan")[1], f) for f in dir.rglob("*xyz")]
+    return sorted(files, key=lambda name: name[0])
+
+
+def get_energies(xyz_path: Path):
+    # --- Update energies ---
+    run_dir = Path(str(xyz_path).split("run")[0]) / "run"
+    revdsd_logs = [x for x in (run_dir / "REVDSD").rglob("REVDSD.log")]
+    zpv_energies = []
+    for log in revdsd_logs:
+        with open(str(log), "r") as f:
+            zpv_energies += (
+                line.split("Eh")[1].strip() for line in f if "Zero point energy" in line
+            )
+    zpv_text = (
+        "ZPV: " + ",".join(e for e in zpv_energies)
+        if zpv_energies
+        else "Zero Point Vibrational Energy: --"
+    )
+    ccsdt_logs = [x for x in (run_dir / "CCSDT").rglob("CCSDT.log")]
+    spc_energies = []
+    for log in ccsdt_logs:
+        with open(str(log), "r") as f:
+            spc_energies += (
+                line.split("ENERGY")[1].strip()
+                for line in f
+                if "FINAL SINGLE POINT ENERGY" in line
+            )
+    spc_text = (
+        "SPC (hartrees): " + ",".join(e for e in spc_energies)
+        if spc_energies
+        else "Single Point Calculation Energy: --"
+    )
+    return zpv_text, spc_text
+
+
+def optimization(
     smiles_string: str = None,
     initial_xyz: Path = None,
     transition_state: bool = False,
@@ -127,7 +194,7 @@ def write(
         path_out = Path(par_dir) / "submit.sh"
         path_out.write_text(sh_script)
 
-        os.system(f"bash {str(path_out)}")
+        return f"bash {path_out}"
 
     elif initial_xyz:
         raise NotImplementedError("Initial XYZ input not yet implemented.")

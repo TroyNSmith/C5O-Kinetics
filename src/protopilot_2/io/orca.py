@@ -156,3 +156,85 @@ def orca_input_and_sh(
 
     if rxn_coord is not None:
         print(f"pixi run run_scan {path_out.parent}")
+
+
+class input_file:
+    def job_block(method: str, job_type: str = "opt"):
+        job_pars = "# --- Job Parameters\n"
+        if job_type == "opt":
+            job_pars += f"! {method} OPT\n\n"
+        elif job_type == "opt_freq":
+            job_pars += f"! {method} OPT NumFreq\n\n"
+        elif job_type == "opt_freq_ts":
+            job_pars += f"! {method} OPTTS NumFreq\n\n%geom\n    Calc_Hess true\n    NumHess true\nend\n\n"
+        elif job_type == "goat":
+            job_pars += f"! {method} GOAT\n\n"
+        elif job_type == "elec":
+            job_pars += f"! {method}\n\n"
+        else:
+            raise ValueError(f"Unknown job_type: {job_type}")
+
+        return job_pars
+
+
+class submit_script:
+    def slurm_block(
+        job_name: str,
+        num_cpus: int = 8,
+        mem_per_cpu: int = 1,
+        lscratch_size: int = 20,
+        partition: str = "batch",
+        time: str = "4:00:00",
+    ):
+        slurm_pars = (
+            "#!/bin/bash\n"
+            f"#SBATCH --partition={partition}\n"
+            f"#SBATCH --gres=lscratch:{lscratch_size}\n"
+            f"#SBATCH --job-name={job_name}\n"
+            "#SBATCH --nodes=1\n"
+            f"#SBATCH --ntasks={num_cpus}\n"
+            f"#SBATCH --ntasks-per-node={num_cpus}\n"  # Here
+            "#SBATCH --cpus-per-task=1\n"
+            f"#SBATCH --time={time}\n"
+            f"#SBATCH --mem-per-cpu={mem_per_cpu}G\n\n"  # Here
+        )
+        return slurm_pars
+
+
+def xtb(
+    smiles: str,
+    job_opts: str,
+    charge: int,
+    multiplicity: int,
+    output_dir: Path,
+    xyz_name: str,
+    job_type: str = "opt",
+    rxn_coord: str = None,
+) -> None:
+    """
+    Write an ORCA input file for various calculation types.
+
+    job_type options:
+        - "opt": Optimization only (no frequency calculation) (default)
+        - "opt_freq": Optimization and frequency calculation
+        - "opt_freq_ts": Optimization and frequency calculation for transition states
+        - "goat": Geometry optimization and frequency calculation (GOAT)
+        - "elec": Single-point electronic structure calculation
+        - "rxn_coord": Reaction coordinate to scan
+    """
+    job_name = f"{smiles}_xtb"
+    num_cpus = 8
+    mem_per_cpu = 1
+    lscratch_size = 10
+    time = "00:30:00"
+    if job_type == "goat":
+        cp_command = f"cp XTB.globalminimum.xyz {output_dir.parent}/REVDSD/XTB.xyz"
+    else:
+        cp_command = ""
+
+    # --- ORCA Input File
+    par_line = "# --- ORCA Parameters\n"
+    par_line += f"%PAL NPROCS {num_cpus} END\n"  # Here
+    par_line += f"%maxcore {mem_per_cpu * 750}\n\n"  # Here
+
+    job_block = input_file.job_block(job_type=job_type, method="XTB")
