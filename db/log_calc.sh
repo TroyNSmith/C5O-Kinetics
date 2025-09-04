@@ -21,7 +21,7 @@ INSERT OR REPLACE INTO calculations (
   $MULTIPLICITY,
   $ENERGY,
   '$XYZ',
-  '$HESS',
+  '$HESS'
 );
 COMMIT;
 EOF
