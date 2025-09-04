@@ -1,4 +1,4 @@
-from protomol.rd.mol import from_smiles, intra_proton_transfer
+from protomol.rd.mol import beta_cleavage, from_smiles, intra_proton_transfer
 from rdkit import Chem
 from rdkit.Chem import AllChem
 
@@ -130,10 +130,11 @@ def standard_optimization_from_smiles(
     multiplicity: int = None,
 ):
     identifier = _smiles_dir_identifier(smiles)
-    if multiplicity is None and (smiles.count("[") + smiles.count("]")) == 0:
-        multiplicity = 1
-    else:
-        multiplicity = 2
+    if multiplicity is None:
+        if (smiles.count("[") + smiles.count("]")) == 0:
+            multiplicity = 1
+        else:
+            multiplicity = 2
 
     # XTB GOAT
     method = ("XTB", "GOAT")
@@ -191,6 +192,7 @@ def standard_scan_from_smiles(
     idx2: int,
     charge: int = 0,
     multiplicity: int = None,
+    mechanism: str = "proton transfer",
 ):
     if multiplicity is None and (smiles.count("[") + smiles.count("]")) == 0:
         multiplicity = 1
@@ -201,11 +203,13 @@ def standard_scan_from_smiles(
     method = ("XTB", "OPT")
     log_command = (
         "module load SQLite/3.45.3\n"
-        "xyz_block=\n"
         f'bash /home/tns97255/C5O-Kinetics/db/log_calc.sh "{smiles}" "XTB SCAN {idx1} {idx2}" "OPT" {multiplicity} 0 "$(<"XTB.allxyz")" ""'
     )
     cp_command = ""
-    xyz, scan_command = intra_proton_transfer(smiles, idx1, idx2)
+    if mechanism.lower() == "proton transfer":
+        xyz, scan_command = intra_proton_transfer(smiles, idx1, idx2)
+    elif mechanism.lower() == "beta cleavage":
+        xyz, scan_command = beta_cleavage(smiles, idx1, idx2)
     _files_from_template(
         smiles=smiles,
         method=method,
@@ -218,7 +222,10 @@ def standard_scan_from_smiles(
     )
     workdir = _workdir(smiles, "", f"Scan_{idx1}_{idx2}")
     (workdir / "XTB/init.xyz").write_text(xyz)
-    return f"sbatch {workdir / 'XTB/submit.sh'}"
+    template_content = f"#!bin/bash\ncd {workdir}/XTB\nsbatch submit.sh"
+    with open(workdir / "path.sh", "w") as file:
+        file.write(template_content)
+    return f"bash {workdir / 'path.sh'}"
 
 
 def standard_optimization_from_scan(
@@ -226,21 +233,50 @@ def standard_optimization_from_scan(
     xyz_block: str,
     idx1: int,
     idx2: int,
+    type: str = "transfer",
     multiplicity: int = 2,
     charge: int = 0,
 ):
+    workdir = _workdir(smiles, "", f"Scan_{idx1}_{idx2}")
     # REVDSD OPTTS FREQ
+    (workdir / "REV").mkdir(exist_ok=True)
+    (workdir / "REV/init.xyz").write_text(xyz_block)
     method = (
         "REVDSD-PBEP86-D4/2021 def2-TZVPP def2-TZVPP/c",
         "OPTTS NumFreq",
     )
     log_command = (
         "module load SQLite/3.45.3\n"
-        "xyz_block=\n"
-        f'bash /home/tns97255/C5O-Kinetics/db/log_calc.sh "{smiles}" "REV OPT {idx1} {idx2}" "OPTTS NumFreq" 0 "$(<"REV.xyz")" "$(<"REV.hess")"'
+        "energy=$(tac REV.log | grep 'Zero point energy' | head -n 1 | awk '{print $(NF-1)}')\n"
+        "num_imag=$(awk '/\*\*\* OPTIMIZATION RUN DONE \*\*\*/ {found=1; next} found && /\*\*\*imaginary mode\*\*/ {count++} END {print count}' REV.log)\n"
+        'if [ "$num_imag" -eq 1 ]; then\n'
+        '    read mode_idx freq <<< "$(\n'
+        "    awk '\n"
+        "    /\*\*\* OPTIMIZATION RUN DONE \*\*\*/ {found=1; next}\n"
+        "    found && /\*\*\*imaginary mode\*\*/ {\n"
+        "        match($0, /^[[:space:]]*([0-9]+):[[:space:]]*(-?[0-9.]+)/, arr)\n"
+        "        if (arr[1] && arr[2]) {\n"
+        "            print arr[1], arr[2]\n"
+        "            exit\n"
+        "        }\n"
+        "    }\n"
+        "    ' REV.log)\"\n"
+        '    mode_idx="$mode_idx"\n'
+        '    padded_idx=$(printf "%03d" "$mode_idx")\n'
+        '    orca_pltvib REV.log "$mode_idx"\n'
+        '    vib_xyz_file="REV.log.v${padded_idx}.xyz"\n'
+        '    vib_xyz=$(<"$vib_xyz_file")\n'
+        "else\n"
+        "    mode_idx=null\n"
+        "    freq=null\n"
+        "    vib_xyz=null\n"
+        "fi\n\n"
+        f'bash /home/tns97255/C5O-Kinetics/db/log_freq.sh "{smiles}" "REV OPT {idx1} {idx2}" "OPTTS NumFreq" {multiplicity} "$mode_idx" "$freq" "$vib_xyz"\n'
+        f'bash /home/tns97255/C5O-Kinetics/db/log_calc.sh "{smiles}" "REV OPT {idx1} {idx2}" "OPTTS NumFreq" {multiplicity} "$energy" "$(<"REV.xyz")" "$(<"REV.hess")"\n'
     )
-    cp_command = ""
-    scan_command = "%geom\n   Calc_Hess true\n   NumHess true\n end"
+
+    cp_command = f"cp REV.xyz {workdir}/CCS/init.xyz"
+    scan_command = "%geom\n   Calc_Hess true\n   NumHess true\n   convergence tight\nend\n%scf convergence verytight end\n"
     _files_from_template(
         smiles=smiles,
         method=method,
@@ -251,6 +287,30 @@ def standard_optimization_from_scan(
         procedure=f"Scan_{idx1}_{idx2}",
         scan_command=scan_command,
     )
-    workdir = _workdir(smiles, "", f"Scan_{idx1}_{idx2}")
-    (workdir / "REV/init.xyz").write_text(xyz_block)
-    return f"sbatch {workdir / 'XTB/submit.sh'}"
+
+    # CCSDT
+    method = ("CCSD(T)-F12/RI cc-pVDZ-F12 cc-pVDZ-F12-CABS cc-pVTZ/c", "")
+    log_command = (
+        "module load SQLite/3.45.3\n"
+        "energy_hartree=$(tac CCS.log | grep 'FINAL SINGLE POINT ENERGY' | head -n 1 | awk '{print $(NF)}')\n"
+        'energy=$(echo "$energy_hartree * 627.509" | bc -l)\n'
+        f'bash /home/tns97255/C5O-Kinetics/db/log_calc.sh "{smiles}" "CCSD(T)-F12/RI cc-pVDZ-F12 cc-pVDZ-F12-CABS cc-pVTZ/c" "SPC {idx1} {idx2}" {multiplicity} "$energy" "$(<"init.xyz")" ""'
+    )
+    cp_command = ""
+    _files_from_template(
+        smiles,
+        method,
+        log_command,
+        cp_command,
+        charge,
+        multiplicity,
+        procedure=f"Scan_{idx1}_{idx2}",
+    )
+
+    with open(Path(__file__).parent / "batch_scan_opt.sh.template", "r") as file:
+        template_content = file.read()
+    template_content = template_content.replace('"[workdir]"', str(workdir))
+    with open(workdir / "batch.sh", "w") as file:
+        file.write(template_content)
+
+    return f"bash {workdir / 'batch.sh'}"

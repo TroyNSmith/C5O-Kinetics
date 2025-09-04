@@ -4,7 +4,7 @@ import numpy as np
 from PIL.Image import Image
 import py3Dmol
 from rdkit import Chem, DistanceGeometry
-from rdkit.Chem import Descriptors, Draw, Mol, rdDistGeom, rdmolfiles
+from rdkit.Chem import AllChem, Descriptors, Draw, Mol, rdDistGeom, rdmolfiles
 
 from collections import defaultdict
 import copy
@@ -14,6 +14,72 @@ from ..util import ref, units
 from ..util.types import NDArray
 
 RDKIT_DISTANCE_UNIT = "angstrom"
+
+
+def beta_cleavage_indices(smiles: str, return_tuple: bool = True):
+    def _alpha_indices(mol: Chem.Mol, rad_indices: list):
+        alpha_indices = set()
+        for idx in rad_indices:
+            atom = mol.GetAtomWithIdx(idx)
+            for neighbor in atom.GetNeighbors():
+                if neighbor.GetSymbol() != "H":
+                    alpha_indices.add(neighbor.GetIdx())
+        return list(alpha_indices)
+
+    def _beta_indices(mol: Chem.Mol, rad_indices: list, alpha_indices: list):
+        beta_indices = set()
+        for idx in alpha_indices:
+            atom = mol.GetAtomWithIdx(idx)
+            for neighbor in atom.GetNeighbors():
+                if neighbor.GetSymbol() != "H" and neighbor.GetIdx() not in rad_indices:
+                    beta_indices.add(neighbor.GetIdx())
+        return list(beta_indices)
+
+    mol = from_smiles(smiles)
+    rad_indices = [
+        atom.GetIdx() for atom in mol.GetAtoms() if atom.GetNumRadicalElectrons() > 0
+    ]
+    alpha_indices = _alpha_indices(mol, rad_indices)
+    beta_indices = _beta_indices(mol, rad_indices, alpha_indices)
+
+    if return_tuple:
+        alpha_tuples = []
+        beta_tuples = []
+        for idx in alpha_indices:
+            alpha_tuples.append((f"{mol.GetAtomWithIdx(idx).GetSymbol()}:{idx}", idx))
+        for idx in beta_indices:
+            beta_tuples.append((f"{mol.GetAtomWithIdx(idx).GetSymbol()}:{idx}", idx))
+        return alpha_tuples, beta_tuples
+
+    return alpha_indices, beta_indices
+
+
+def radical_indices(smiles: str, return_tuple: bool = True):
+    mol = from_smiles(smiles)
+    rad_indices = [
+        atom.GetIdx() for atom in mol.GetAtoms() if atom.GetNumRadicalElectrons() > 0
+    ]
+    if return_tuple:
+        tuples = []
+        for idx in rad_indices:
+            tuples.append((f"{mol.GetAtomWithIdx(idx).GetSymbol()}:{idx}", idx))
+        return tuples
+    return rad_indices
+
+
+def map_atomic_symbols_to_indices(
+    smiles: str, return_tuple: bool = True
+) -> list[tuple]:
+    mol = Chem.MolFromSmiles(smiles)
+    mol = Chem.AddHs(mol)
+    AllChem.EmbedMolecule(mol)
+    indices = [atom.GetIdx() for atom in mol.GetAtoms()]
+    if return_tuple:
+        identifiers = [f"{atom.GetSymbol()}:{atom.GetIdx()}" for atom in mol.GetAtoms()]
+        tuples = [(identifiers[i], indices[i]) for i in range(len(indices))]
+        return tuples
+
+    return indices
 
 
 def from_smiles(smi: str, with_coords: bool = False) -> Mol:
@@ -295,6 +361,19 @@ def intra_proton_transfer(smiles: str, idx1: int, idx2: int):
     )
     min_dist = ref.LEN_DCT[symbols_pair] + 0.05
     scan_path = f"% geom\n   scan\n       B {idx1} {idx2} = 2.00, {min_dist:.2f}, 18\n   end\nend\n"
+    return xyz, scan_path
+
+
+def beta_cleavage(smiles: str, idx1: int, idx2: int):
+    mol_obj = from_smiles(smiles)
+    mol_obj = with_coordinates(mol_obj)
+    xyz = Chem.MolToXYZBlock(mol_obj)
+    symbols_pair = (
+        mol_obj.GetAtomWithIdx(idx1).GetSymbol(),
+        mol_obj.GetAtomWithIdx(idx2).GetSymbol(),
+    )
+    min_dist = ref.LEN_DCT[symbols_pair] + 0.05
+    scan_path = f"% geom\n   scan\n       B {idx1} {idx2} = {min_dist:.2f}, {min_dist + 1.2:.2f}, 18\n   end\nend\n"
     return xyz, scan_path
 
 

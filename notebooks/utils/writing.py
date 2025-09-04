@@ -39,7 +39,7 @@ def orca_input_and_sh(
     elif "REVDSD" in method:
         label = "REVDSD"
         job_name = f"{smiles}_revdsd"
-        energy_cmd = f'ENERGY=$(grep -R --include "REVDSD.log" "Zero point energy")\n'
+        energy_cmd = 'ENERGY=$(grep -R --include "REVDSD.log" "Zero point energy")\n'
         partition = "batch"
         num_cpus = 16
         mem_per_cpu = 1
@@ -153,15 +153,11 @@ def orca_input_and_sh(
     )
     log_opts = (
         "# --- Update the JSON log\n"
-        'if [! -f $HOME/C5O-Kinetics/results.json]; then\n'
+        "if [! -f $HOME/C5O-Kinetics/results.json]; then\n"
         '   echo "{}" > $HOME/C5O-Kinetics/results.json\n'
         "fi\n\n"
     )
-    if 
-    (
-        f"jq --arg s {smiles} --arg m {method} --arg t {job_type}"
-
-    )
+    (f"jq --arg s {smiles} --arg m {method} --arg t {job_type}")
     # --- Combine All Parts and Write to File
     script = slurm_opts + module_opts + lscratch_opts + job_opts
     path_out = Path(output_dir) / f"submit_{label}.sh"

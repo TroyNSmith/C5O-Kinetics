@@ -36,54 +36,11 @@ sqlite = "*"
 pint = ">=0.25,<0.26"
 pydantic = ">=2.11.7,<3"
 
-[tool.pixi.tasks.extract]
-args = [
-    { "arg" = "workdir"},
-]
-cmd = "bash .scripts/extract.sh {{ workdir }}"
-
-[tool.pixi.tasks.writer]
-args = [
-    { "arg" = "smiles"},
-    { "arg" = "workflow"},
-]
-cmd = "python src/protopilot/orca.py {{ workflow }} -smi {{ smiles }}"
-
-[tool.pixi.tasks.run_opt]
-args = [
-    { "arg" = "workdir" },
-]
-cmd = "bash .scripts/run_opt.sh {{ workdir }}"
-
-[tool.pixi.tasks.run_scan]
-args = [
-    { "arg" = "workdir" },
-]
-cmd = "bash .scripts/run_scan.sh {{ workdir }}"
-
 [tool.pixi.tasks.energy]
 args = [
-    { "arg" = "workdir" },
+    { "arg" = "smiles" },
 ]
-cmd = "bash .scripts/read_energy.sh {{ workdir }}"
-
-[tool.pixi.tasks.find_opt]
-args = [
-    { "arg" = "workdir" },
-]
-cmd = "bash .scripts/find_opt.sh {{ workdir }}"
-
-[tool.pixi.tasks.find_scan]
-args = [
-    { "arg" = "workdir" },
-]
-cmd = "bash .scripts/find_scan.sh {{ workdir }}"
-
-[tool.pixi.tasks.runner]
-args = [
-    { "arg" = "path"},
-]
-cmd = "sbatch {{ path }}/submit.sh"
+cmd = "python .scripts/energy.py '{{ smiles }}'"
 
 [tool.ruff]
 line-length = 88

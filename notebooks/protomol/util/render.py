@@ -3,8 +3,25 @@ from rdkit import Chem
 from rdkit.Chem import AllChem
 
 
+def _get_radical_indices(
+    smiles: str = None, xyz_block: str = None, mol: Chem.Mol = None
+):
+    if smiles is not None:
+        mol = Chem.AddHs(Chem.MolFromSmiles(smiles))
+        AllChem.EmbedMolecule(mol)
+    elif xyz_block is not None:
+        mol = Chem.MolFromXYZBlock(xyz_block)
+
+    radicals = [a.GetIdx() for a in mol.GetAtoms() if a.GetNumRadicalElectrons() != 0]
+    return radicals
+
+
 def set_viewer(
-    xyz_block: str, add_labels: bool = False, width: int = 350, height: int = 350
+    xyz_block: str,
+    add_labels: bool = False,
+    radicals: list = [],
+    width: int = 350,
+    height: int = 350,
 ) -> py3Dmol.view:
     """
     Return a py3Dmol viewer from an xyz_block.
@@ -14,11 +31,12 @@ def set_viewer(
     viewer.setStyle({"stick": {}, "sphere": {"scale": 0.3}})
     if add_labels:
         for i in range(int(xyz_block.split("\n")[0])):
+            color = "red" if i in radicals else "blue"
             viewer.addLabel(
-                i,
+                str(i),
                 {
                     "backgroundOpacity": 0,
-                    "fontColor": "blue",
+                    "fontColor": color,
                     "alignment": "center",
                     "inFront": True,
                 },
@@ -32,21 +50,24 @@ def from_smiles(
 ):
     mol = Chem.AddHs(Chem.MolFromSmiles(smiles))
     AllChem.EmbedMolecule(mol)
-    viewer = set_viewer(Chem.MolToXYZBlock(mol), add_labels)
+    radicals = _get_radical_indices(smiles=smiles)
+    viewer = set_viewer(Chem.MolToXYZBlock(mol), add_labels, radicals=radicals)
     viewer.show()
 
 
 def from_mol(
     mol: Chem.Mol, add_labels: bool = False, width: int = 600, height: int = 400
 ):
-    viewer = set_viewer(Chem.MolToXYZBlock(mol), add_labels)
+    radicals = _get_radical_indices(mol=mol)
+    viewer = set_viewer(Chem.MolToXYZBlock(mol), add_labels, radicals=radicals)
     viewer.show()
 
 
 def from_xyz_block(
     xyz_block: str, add_labels: bool = False, width: int = 600, height: int = 400
 ):
-    viewer = set_viewer(xyz_block, add_labels)
+    radicals = _get_radical_indices(xyz_block=xyz_block)
+    viewer = set_viewer(xyz_block, add_labels, radicals=radicals)
     viewer.show()
 
 

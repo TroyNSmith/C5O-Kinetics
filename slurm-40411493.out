@@ -1,5 +1,0 @@
-[file orca_main/run.cpp, line 383]: Cannot open input file: XTB.inp
-
-/var/spool/slurmd/job40411493/slurm_script: line 26: XTB_traj.xyz: No such file or directory
-cp: cannot stat 'XTB.globalminimum.xyz': No such file or directory
-slurmstepd: error: *** JOB 40411493 ON a1-8 CANCELLED AT 2025-09-03T23:12:27 ***
