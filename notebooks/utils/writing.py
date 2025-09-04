@@ -26,6 +26,7 @@ def orca_input_and_sh(
     if "XTB" in method:
         label = "XTB"
         job_name = f"{smiles}_xtb"
+        energy_cmd = "ENERGY=0\n"
         partition = "batch"
         num_cpus = 8
         mem_per_cpu = 1
@@ -38,6 +39,7 @@ def orca_input_and_sh(
     elif "REVDSD" in method:
         label = "REVDSD"
         job_name = f"{smiles}_revdsd"
+        energy_cmd = f'ENERGY=$(grep -R --include "REVDSD.log" "Zero point energy")\n'
         partition = "batch"
         num_cpus = 16
         mem_per_cpu = 1
@@ -147,12 +149,20 @@ def orca_input_and_sh(
         "# --- Extract important files\n"
         "cp -r /lscratch/${USER}/${SLURM_JOB_ID} ${SLURM_SUBMIT_DIR}\n"
         f"{cp_command}\n"
-        "rm -rf /lscratch/${USER}/${SLURM_JOB_ID}\n"
+        "rm -rf /lscratch/${USER}/${SLURM_JOB_ID}\n\n"
+    )
+    log_opts = (
+        "# --- Update the JSON log\n"
+        'if [! -f $HOME/C5O-Kinetics/results.json]; then\n'
+        '   echo "{}" > $HOME/C5O-Kinetics/results.json\n'
+        "fi\n\n"
+    )
+    if 
+    (
+        f"jq --arg s {smiles} --arg m {method} --arg t {job_type}"
+
     )
     # --- Combine All Parts and Write to File
     script = slurm_opts + module_opts + lscratch_opts + job_opts
     path_out = Path(output_dir) / f"submit_{label}.sh"
     path_out.write_text(script)
-
-    if rxn_coord is not None:
-        print(f"pixi run run_scan {path_out.parent}")

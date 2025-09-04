@@ -1,4 +1,0 @@
-cp: cannot stat '$slurm_id/XTB.xyz': No such file or directory
-cp: cannot stat '$slurm_id/REVDSD.xyz': No such file or directory
-cp: missing destination file operand after '$slurm_id/CCSDT.xyz'
-Try 'cp --help' for more information.

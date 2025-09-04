@@ -1,0 +1,10 @@
+#!/bin/bash
+
+cd /home/tns97255/C5O-Kinetics/calc/[identifier]/Optimization/run/XTB
+xtb_id=$(sbatch submit.sh | awk '{{print $NF}}')
+
+cd /home/tns97255/C5O-Kinetics/calc/[identifier]/Optimization/run/REV
+revdsd_id=$(sbatch --dependency=afterok:$xtb_id submit.sh | awk '{print $NF}')
+
+cd /home/tns97255/C5O-Kinetics/calc/[identifier]/Optimization/run/CCS
+sbatch --dependency=afterok:$revdsd_id submit.sh

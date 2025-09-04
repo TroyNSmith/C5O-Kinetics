@@ -1,0 +1,28 @@
+#!/bin/bash
+#SBATCH --partition=batch
+#SBATCH --gres=lscratch:[size_lscratch]
+#SBATCH --job-name=[smiles]_[method_abbr]
+#SBATCH --nodes=1
+#SBATCH --ntasks=[num_cpus]
+#SBATCH --ntasks-per-node=[num_cpus]
+#SBATCH --cpus-per-task=1
+#SBATCH --time=[time]
+#SBATCH --mem-per-cpu=[size_mem]G
+
+# --- Load ORCA 6.1
+module load ORCA/6.1
+cd ${SLURM_SUBMIT_DIR}
+
+# --- Initialize lscratch directory
+mkdir -p /lscratch/${USER}/${SLURM_JOB_ID}
+cp -r "${SLURM_SUBMIT_DIR}/." /lscratch/${USER}/${SLURM_JOB_ID}
+cd /lscratch/${USER}/${SLURM_JOB_ID}
+
+# --- Run orca
+$(which orca) [method_abbr].inp > [method_abbr].log
+
+# --- Extract important files
+[log_command]
+[cp_command]
+cp -r /lscratch/${USER}/${SLURM_JOB_ID} ${SLURM_SUBMIT_DIR}
+rm -rf /lscratch/${USER}/${SLURM_JOB_ID}

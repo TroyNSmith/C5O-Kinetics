@@ -1,0 +1,5 @@
+xtb
+  molecule = molecule.xyz
+  charge = 0
+  multiplicity = 1
+end
