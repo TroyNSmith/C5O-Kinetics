@@ -45,7 +45,8 @@ def refresh():
 
     execute = "SELECT calc_id FROM calculations"
     rows = _execute_query(execute, new_db)
-    for calc_id in rows[:][0]:
+    calc_ids = [rows[i][0] for i in range(len(rows))]
+    for calc_id in calc_ids:
         workdir = calc_dir / f"{calc_id}"
         if calc_id not in xyz_map:
             result = [f for f in workdir.rglob("calc.xyz")][0].read_text()

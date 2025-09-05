@@ -44,13 +44,17 @@ traj_map = [rows[i][0] for i in range(len(rows))]
 
 execute = "SELECT calc_id FROM calculations"
 rows = _execute_query(execute, new_db)
-for calc_id in rows[:][0]:
+calc_ids = [rows[i][0] for i in range(len(rows))]
+for calc_id in calc_ids:
+    print(calc_id)
     workdir = calc_dir / f"{calc_id}"
     if calc_id not in xyz_map:
+        print("Here 1")
         result = [f for f in workdir.rglob("calc.xyz")][0].read_text()
         execute = "INSERT INTO xyz (calc_id, xyz_text) VALUES (?, ?)"
         _execute_append(execute, (calc_id, result), new_db)
     if calc_id not in traj_map:
+        print("Here 2")
         result = [f for f in workdir.rglob("calc_trj.xyz")][0].read_text()
         execute = "INSERT INTO traj (calc_id, traj_text) VALUES (?, ?)"
         _execute_append(execute, (calc_id, result), new_db)

@@ -208,5 +208,5 @@ __marimo__/
 # pixi environments
 .pixi
 
-# ignore "temporary" run files
-run*/
+# ignore calc files
+calc/

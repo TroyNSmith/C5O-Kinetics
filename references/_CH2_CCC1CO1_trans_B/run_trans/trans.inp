@@ -1,0 +1,8 @@
+! PAL8
+! wB97X-3c
+! OPTTS FREQ
+%geom
+    Calc_Hess true
+end
+
+* xyzfile 0 2 trans_guess.xyz

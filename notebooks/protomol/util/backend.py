@@ -59,42 +59,29 @@ class Query_SQL:
             return rows[0][0]
 
     def methods() -> list:
-        execute = "SELECT DISTINCT method, method_id FROM methods"
+        execute = "SELECT DISTINCT method, functional, basis, method_id FROM methods"
         rows = Query_SQL._execute_query(execute, new_db)
-        return [(rows[i][0], rows[i][1]) for i in range(len(rows))]
+        return [
+            (f"{rows[i][0].strip():<20} | {rows[i][1]} {rows[i][2]}", rows[i][3])
+            for i in range(len(rows))
+        ]
 
-    def functionals(method_id: int) -> list:
-        execute = "SELECT DISTINCT functional, basis FROM methods WHERE method_id = ?"
-        rows = Query_SQL._execute_query(execute, new_db, method_id)
-        return [f"{rows[i][0]} {rows[i][1]}" for i in range(len(rows))]
-
-    def calculations(smiles: str):
+    def calculations(smiles: str, method_id: int = None):
         smiles_id = Query_SQL.smiles_id(smiles)
-        execute = "SELECT * FROM calculations WHERE smiles_id = ?"
-        return Query_SQL._execute_query(execute, new_db, smiles_id)
+        if method_id:
+            execute = f"SELECT * FROM calculations WHERE smiles_id = {smiles_id} AND method_id = {method_id}"
+        else:
+            execute = f"SELECT * FROM calculations WHERE smiles_id = {smiles_id}"
+        return Query_SQL._execute_query(execute, new_db)
 
-    def xyzs(
-        smiles: str, method_id: int, calc_id: int = None, bypass: bool = False
-    ) -> str:
-        if calc_id:
-            raise NotImplementedError()
-        else:
-            execute = "SELECT smiles_id, initial FROM smiles WHERE smiles_text = ?"
-            smiles_id, initial_xyz = Query_SQL._execute_query(execute, new_db, smiles)[
-                0
-            ][:]
-            execute = f"SELECT calc_id FROM calculations WHERE smiles_id = {smiles_id} AND method_id = {method_id}"
-            rows = Query_SQL._execute_query(execute, new_db)
-        if len(rows) > 0 and not bypass:
-            matched = True
-            execute = "SELECT xyz_text FROM xyz WHERE calc_id = ?"
-            xyzs = Query_SQL._execute_query(
-                execute, new_db, [(rows[i][0],) for i in range(len(rows))], many=True
+    def xyzs(calc_id: int = None) -> str:
+        execute = "SELECT xyz_text FROM xyz WHERE calc_id = ?"
+        xyzs = Query_SQL._execute_query(execute, new_db, calc_id)
+        if len(xyzs) != 1:
+            raise ValueError(
+                f"Error fetching xyz_text. Check for either multiple or no entries in {new_db}."
             )
-            return [xyzs[i][0] for i in range(len(xyzs))], matched
-        else:
-            matched = False
-            return [initial_xyz], matched
+        return xyzs[0][0]
 
 
 class Append_SQL:
@@ -144,7 +131,9 @@ class Append_SQL:
         )
 
 
-def write_orca(smiles: str, method_id: int, idx1: int = 0, idx2: int = 0):
+def write_orca(
+    smiles: str, method_id: int, init_calc_id: int = 0, idx1: int = 0, idx2: int = 0
+):
     execute = "SELECT smiles_id, multiplicity FROM smiles WHERE smiles_text = ?"
     smiles_id, multiplicity = Query_SQL._execute_query(execute, new_db, smiles)[0][:]
     execute = "SELECT functional, method, inp_template, submit_template FROM methods WHERE method_id = ?"
@@ -161,6 +150,12 @@ def write_orca(smiles: str, method_id: int, idx1: int = 0, idx2: int = 0):
         execute = "SELECT initial FROM smiles WHERE smiles_text = ?"
         initial_xyz = Query_SQL._execute_query(execute, new_db, smiles)[0][0]
         (outdir / "init.xyz").write_text(initial_xyz)
+    else:
+        assert init_calc_id > 0, (
+            "Must provide an initial calculation id tying to the initial xyz structure for this calculation."
+        )
+        initial_xyz = Query_SQL.xyzs(init_calc_id)
+        (outdir / "init.xyz").write_text(initial_xyz)
     substitutions = {
         "[SMILES]": re.sub(r"[^a-zA-Z0-9\s]", "", smiles),
         "[multiplicity]": multiplicity,
@@ -175,7 +170,7 @@ def write_orca(smiles: str, method_id: int, idx1: int = 0, idx2: int = 0):
     (outdir / "calc.inp").write_text(inp_template)
     (outdir / "submit.sh").write_text(submit_template)
 
-    return f"cd {outdir}; sbatch 'submit.sh'"
+    return f"cd {outdir}; sbatch submit.sh"
 
 
 class Styles:
