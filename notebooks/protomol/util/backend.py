@@ -132,7 +132,7 @@ class Append_SQL:
             execute, (smiles_id, method_id, scan_idx1, scan_idx2), new_db
         )
         if return_id:
-            execute = f"SELECT calc_id FROM calculations WHERE smiles_id = {smiles_id} AND method_id = {method_id}"
+            execute = f"SELECT calc_id FROM calculations WHERE smiles_id = {smiles_id} AND method_id = {method_id} AND scan_idx1 = {scan_idx1} AND scan_idx2 = {scan_idx2}"
             return Query_SQL._execute_query(execute, new_db)[0][0]
 
     def _method(
@@ -209,7 +209,6 @@ def write_orca(
             initial_xyz, min_dist, max_dist = intra_proton_transfer(smiles, idx1, idx2)
             substitutions["[start]"] = min_dist
             substitutions["[end]"] = max_dist
-            raise ValueError(substitutions)
         elif mechanism.lower() == "beta cleavage":
             initial_xyz, min_dist, max_dist = beta_cleavage(smiles, idx1, idx2)
             substitutions["[start]"] = min_dist

@@ -59,12 +59,18 @@ def radical_indices(smiles: str, return_tuple: bool = True):
     rad_indices = [
         atom.GetIdx() for atom in mol.GetAtoms() if atom.GetNumRadicalElectrons() > 0
     ]
+    proton_indices = [
+        atom.GetIdx() for atom in mol.GetAtoms() if atom.GetSymbol() == "H"
+    ]
     if return_tuple:
-        tuples = []
+        rad_tuples = []
+        proton_tuples = []
         for idx in rad_indices:
-            tuples.append((f"{mol.GetAtomWithIdx(idx).GetSymbol()}:{idx}", idx))
-        return tuples
-    return rad_indices
+            rad_tuples.append((f"{mol.GetAtomWithIdx(idx).GetSymbol()}:{idx}", idx))
+        for idx in proton_indices:
+            proton_tuples.append((f"{mol.GetAtomWithIdx(idx).GetSymbol()}:{idx}", idx))
+        return rad_tuples, proton_tuples
+    return rad_indices, proton_indices
 
 
 def map_atomic_symbols_to_indices(
