@@ -7,6 +7,7 @@ import re
 import sqlite3
 
 from ..rd.mol import from_smiles
+from ..util.ref import get_ccsdt_parameters
 from .render import from_allxyz_block, from_xyz_block
 
 calc_db = Path.home() / "C5O-Kinetics/db/results.db"
@@ -20,13 +21,24 @@ class Query_SQL:
         execute: str,
         db: str | Path,
         target_value: str = None,
+        many: bool = False,
     ):
         conn = sqlite3.connect(db)
         cursor = conn.cursor()
+
         if target_value:
-            cursor.execute(execute, (target_value,))
+            if many:  # Can only detect first match for each tuple
+                rows = []
+                for tup in target_value:
+                    cursor.execute(execute, tup)
+                    row = cursor.fetchall()
+                    rows.append(row[0])
+                return rows
+            else:
+                cursor.execute(execute, (target_value,))
         else:
             cursor.execute(execute)
+
         rows = cursor.fetchall()
         cursor.close()
         return rows
@@ -35,6 +47,16 @@ class Query_SQL:
         execute = "SELECT DISTINCT smiles_text FROM smiles"
         rows = Query_SQL._execute_query(execute, new_db)
         return [rows[i][0] for i in range(len(rows))]
+
+    def smiles_id(smiles: str) -> list:
+        execute = "SELECT smiles_id FROM smiles WHERE smiles_text = ?"
+        rows = Query_SQL._execute_query(execute, new_db, smiles)
+        if len(rows) > 1:
+            raise ValueError(f"Multiple matching SMILES strings found in {new_db}")
+        elif len(rows) < 1:
+            raise ValueError(f"No matching SMILES strings found in {new_db}")
+        else:
+            return rows[0][0]
 
     def methods() -> list:
         execute = "SELECT DISTINCT method, method_id FROM methods"
@@ -46,18 +68,33 @@ class Query_SQL:
         rows = Query_SQL._execute_query(execute, new_db, method_id)
         return [f"{rows[i][0]} {rows[i][1]}" for i in range(len(rows))]
 
-    def xyzs(smiles: str, method_id: int) -> str:
-        execute = "SELECT DISTINCT smiles_id FROM smiles WHERE smiles_text = ?"
-        smiles_id = Query_SQL._execute_query(execute, new_db, smiles)[0][0]
-        execute = f"SELECT DISTINCT xyz_text FROM XYZS WHERE smiles_id = {smiles_id} AND method_id = {method_id}"
-        rows = Query_SQL._execute_query(execute, new_db)
-        if len(rows) > 1:
-            return [f"{rows[i][0]} {rows[i][1]}" for i in range(len(rows))]
-        else:
-            return []
+    def calculations(smiles: str):
+        smiles_id = Query_SQL.smiles_id(smiles)
+        execute = "SELECT * FROM calculations WHERE smiles_id = ?"
+        return Query_SQL._execute_query(execute, new_db, smiles_id)
 
-    def calculations(smiles: str, method_id: int) -> list:
-        return
+    def xyzs(
+        smiles: str, method_id: int, calc_id: int = None, bypass: bool = False
+    ) -> str:
+        if calc_id:
+            raise NotImplementedError()
+        else:
+            execute = "SELECT smiles_id, initial FROM smiles WHERE smiles_text = ?"
+            smiles_id, initial_xyz = Query_SQL._execute_query(execute, new_db, smiles)[
+                0
+            ][:]
+            execute = f"SELECT calc_id FROM calculations WHERE smiles_id = {smiles_id} AND method_id = {method_id}"
+            rows = Query_SQL._execute_query(execute, new_db)
+        if len(rows) > 0 and not bypass:
+            matched = True
+            execute = "SELECT xyz_text FROM xyz WHERE calc_id = ?"
+            xyzs = Query_SQL._execute_query(
+                execute, new_db, [(rows[i][0],) for i in range(len(rows))], many=True
+            )
+            return [xyzs[i][0] for i in range(len(xyzs))], matched
+        else:
+            matched = False
+            return [initial_xyz], matched
 
 
 class Append_SQL:
@@ -79,6 +116,21 @@ class Append_SQL:
         )
         Append_SQL._execute_append(execute, (smiles, mult, initial), new_db)
 
+    def calculation(
+        smiles_id: int,
+        method_id: int,
+        scan_idx1: int = -1,
+        scan_idx2: int = -1,
+        return_id: bool = True,
+    ):
+        execute = "INSERT INTO calculations (smiles_id, method_id, scan_idx1, scan_idx2) VALUES (?, ?, ?, ?)"
+        Append_SQL._execute_append(
+            execute, (smiles_id, method_id, scan_idx1, scan_idx2), new_db
+        )
+        if return_id:
+            execute = f"SELECT calc_id FROM calculations WHERE smiles_id = {smiles_id} AND method_id = {method_id}"
+            return Query_SQL._execute_query(execute, new_db)[0][0]
+
     def _method(
         functional: str,
         basis: str,
@@ -90,6 +142,40 @@ class Append_SQL:
         Append_SQL._execute_append(
             execute, (functional, basis, method, inp_template, submit_template), new_db
         )
+
+
+def write_orca(smiles: str, method_id: int, idx1: int = 0, idx2: int = 0):
+    execute = "SELECT smiles_id, multiplicity FROM smiles WHERE smiles_text = ?"
+    smiles_id, multiplicity = Query_SQL._execute_query(execute, new_db, smiles)[0][:]
+    execute = "SELECT functional, method, inp_template, submit_template FROM methods WHERE method_id = ?"
+    rows = Query_SQL._execute_query(execute, new_db, method_id)
+    functional, method, inp_template, submit_template = rows[0][:]
+    execute = f"SELECT calc_id FROM calculations WHERE smiles_id = {smiles_id} AND method_id = {method_id}"
+    rows = Query_SQL._execute_query(execute, new_db)
+    if len(rows) > 0:
+        raise FileExistsError("Calculation matching indicated values already exists.")
+    calc_id = Append_SQL.calculation(smiles_id, method_id, return_id=True)
+    outdir = Path.home() / f"C5O-Kinetics/calc/{calc_id}"
+    outdir.mkdir(exist_ok=True)
+    if method == "GOAT":
+        execute = "SELECT initial FROM smiles WHERE smiles_text = ?"
+        initial_xyz = Query_SQL._execute_query(execute, new_db, smiles)[0][0]
+        (outdir / "init.xyz").write_text(initial_xyz)
+    substitutions = {
+        "[SMILES]": re.sub(r"[^a-zA-Z0-9\s]", "", smiles),
+        "[multiplicity]": multiplicity,
+    }
+    if functional == "CCSD(T)-F12/RI":
+        substitutions = substitutions | get_ccsdt_parameters(
+            smiles.count("C") + smiles.count("O")
+        )
+    for key, val in substitutions.items():
+        inp_template = inp_template.replace(key, str(val))
+        submit_template = submit_template.replace(key, str(val))
+    (outdir / "calc.inp").write_text(inp_template)
+    (outdir / "submit.sh").write_text(submit_template)
+
+    return f"cd {outdir}; sbatch 'submit.sh'"
 
 
 class Styles:

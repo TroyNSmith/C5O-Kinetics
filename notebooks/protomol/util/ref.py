@@ -16,3 +16,27 @@ LEN_DCT = {
     ("C", "Cl"): 1.74,
     ("Cl", "Cl"): 2.0,
 }
+
+
+def get_ccsdt_parameters(num_heavy_atoms: int) -> dict:
+    num_cpus = [0, 4, 4, 12, 12, 16, 20, 20, 20]
+    mem_per_cpu = [0, 1, 1, 2, 4, 4, 4, 6, 12]
+    lscratch_size = [0, 50, 50, 100, 200, 200, 200, 200, 200]
+    time_requested = [
+        "00:00:00",
+        "00:30:00",
+        "00:30:00",
+        "00:30:00",
+        "00:60:00",
+        "02:00:00",
+        "02:00:00",
+        "02:00:00",
+        "06:00:00",
+    ]
+    idx = min(num_heavy_atoms, len(num_cpus) - 1)
+    return {
+        "[num_cpus]": num_cpus[idx],
+        "[mem_per_cpu]": mem_per_cpu[idx],
+        "[lscratch_size]": lscratch_size[idx],
+        "[time_requested]": time_requested[idx],
+    }

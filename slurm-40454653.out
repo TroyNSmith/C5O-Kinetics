@@ -1,0 +1,3 @@
+[file orca_main/run.cpp, line 383]: Cannot open input file: calc.inp
+
+slurmstepd: error: *** JOB 40454653 ON b5-1 CANCELLED AT 2025-09-05T16:01:30 ***
