@@ -83,6 +83,15 @@ class Query_SQL:
             )
         return xyzs[0][0]
 
+    def traj(calc_id: int = None) -> str:
+        execute = "SELECT traj_text FROM traj WHERE calc_id = ?"
+        traj = Query_SQL._execute_query(execute, new_db, calc_id)
+        if len(traj) != 1:
+            raise ValueError(
+                f"Error fetching traj_text. Check for either multiple or no entries in {new_db}."
+            )
+        return traj[0][0]
+
 
 class Append_SQL:
     def _execute_append(
@@ -132,7 +141,12 @@ class Append_SQL:
 
 
 def write_orca(
-    smiles: str, method_id: int, init_calc_id: int = 0, idx1: int = 0, idx2: int = 0
+    smiles: str,
+    method_id: int,
+    init_calc_id: int = 0,
+    idx1: int = 0,
+    idx2: int = 0,
+    mechanism: str = None,
 ):
     execute = "SELECT smiles_id, multiplicity FROM smiles WHERE smiles_text = ?"
     smiles_id, multiplicity = Query_SQL._execute_query(execute, new_db, smiles)[0][:]
@@ -146,29 +160,56 @@ def write_orca(
     calc_id = Append_SQL.calculation(smiles_id, method_id, return_id=True)
     outdir = Path.home() / f"C5O-Kinetics/calc/{calc_id}"
     outdir.mkdir(exist_ok=True)
-    if method == "GOAT":
-        execute = "SELECT initial FROM smiles WHERE smiles_text = ?"
-        initial_xyz = Query_SQL._execute_query(execute, new_db, smiles)[0][0]
-        (outdir / "init.xyz").write_text(initial_xyz)
+    if idx1 == 0 and idx2 == 0:
+        if method == "GOAT":
+            execute = "SELECT initial FROM smiles WHERE smiles_text = ?"
+            initial_xyz = Query_SQL._execute_query(execute, new_db, smiles)[0][0]
+            (outdir / "init.xyz").write_text(initial_xyz)
+        else:
+            assert init_calc_id > 0, (
+                "Must provide an initial calculation id tying to the initial xyz structure for this calculation."
+            )
+            initial_xyz = Query_SQL.xyzs(init_calc_id)
+            (outdir / "init.xyz").write_text(initial_xyz)
+        substitutions = {
+            "[SMILES]": re.sub(r"[^a-zA-Z0-9\s]", "", smiles),
+            "[multiplicity]": multiplicity,
+        }
+        if functional == "CCSD(T)-F12/RI":
+            substitutions = substitutions | get_ccsdt_parameters(
+                smiles.count("C") + smiles.count("O")
+            )
+        for key, val in substitutions.items():
+            inp_template = inp_template.replace(key, str(val))
+            submit_template = submit_template.replace(key, str(val))
+        (outdir / "calc.inp").write_text(inp_template)
+        (outdir / "submit.sh").write_text(submit_template)
     else:
+        assert idx1 + idx2 > 0, "Please provide indices for the path."
         assert init_calc_id > 0, (
             "Must provide an initial calculation id tying to the initial xyz structure for this calculation."
         )
-        initial_xyz = Query_SQL.xyzs(init_calc_id)
+        substitutions = {
+            "[SMILES]": re.sub(r"[^a-zA-Z0-9\s]", "", smiles),
+            "[multiplicity]": multiplicity,
+            "[idx1]": idx1,
+            "[idx2]": idx2,
+        }
+        if mechanism.lower() == "proton transfer":
+            initial_xyz, min_dist, max_dist = Query_SQL.xyzs(init_calc_id)
+            substitutions["start"] = min_dist
+            substitutions["end"] = max_dist
+            raise ValueError(substitutions)
+        elif mechanism.lower() == "beta cleavage":
+            raise NotImplementedError()
+
         (outdir / "init.xyz").write_text(initial_xyz)
-    substitutions = {
-        "[SMILES]": re.sub(r"[^a-zA-Z0-9\s]", "", smiles),
-        "[multiplicity]": multiplicity,
-    }
-    if functional == "CCSD(T)-F12/RI":
-        substitutions = substitutions | get_ccsdt_parameters(
-            smiles.count("C") + smiles.count("O")
-        )
-    for key, val in substitutions.items():
-        inp_template = inp_template.replace(key, str(val))
-        submit_template = submit_template.replace(key, str(val))
-    (outdir / "calc.inp").write_text(inp_template)
-    (outdir / "submit.sh").write_text(submit_template)
+
+        for key, val in substitutions.items():
+            inp_template = inp_template.replace(key, str(val))
+            submit_template = submit_template.replace(key, str(val))
+        (outdir / "calc.inp").write_text(inp_template)
+        (outdir / "submit.sh").write_text(submit_template)
 
     return f"cd {outdir}; sbatch submit.sh"
 

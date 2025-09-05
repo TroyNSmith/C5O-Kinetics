@@ -20,13 +20,11 @@ def set_viewer(
     xyz_block: str,
     add_labels: bool = False,
     radicals: list = [],
-    width: int = 350,
-    height: int = 350,
 ) -> py3Dmol.view:
     """
     Return a py3Dmol viewer from an xyz_block.
     """
-    viewer = py3Dmol.view(width=width, height=height)
+    viewer = py3Dmol.view()
     viewer.addModel(xyz_block, "xyz")
     viewer.setStyle({"stick": {}, "sphere": {"scale": 0.3}})
     if add_labels:
@@ -45,29 +43,26 @@ def set_viewer(
     return viewer.zoomTo()
 
 
-def from_smiles(
-    smiles: str, add_labels: bool = False, width: int = 600, height: int = 400
-):
+def from_smiles(smiles: str, add_labels: bool = False):
     mol = Chem.AddHs(Chem.MolFromSmiles(smiles))
     AllChem.EmbedMolecule(mol)
     radicals = _get_radical_indices(smiles=smiles)
     viewer = set_viewer(Chem.MolToXYZBlock(mol), add_labels, radicals=radicals)
+    viewer.zoomTo()
     viewer.show()
 
 
-def from_mol(
-    mol: Chem.Mol, add_labels: bool = False, width: int = 600, height: int = 400
-):
+def from_mol(mol: Chem.Mol, add_labels: bool = False):
     radicals = _get_radical_indices(mol=mol)
     viewer = set_viewer(Chem.MolToXYZBlock(mol), add_labels, radicals=radicals)
+    viewer.zoomTo()
     viewer.show()
 
 
-def from_xyz_block(
-    xyz_block: str, add_labels: bool = False, width: int = 600, height: int = 400
-):
+def from_xyz_block(xyz_block: str, add_labels: bool = False):
     radicals = _get_radical_indices(xyz_block=xyz_block)
     viewer = set_viewer(xyz_block, add_labels, radicals=radicals)
+    viewer.zoomTo()
     viewer.show()
 
 

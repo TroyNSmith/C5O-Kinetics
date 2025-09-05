@@ -359,9 +359,10 @@ def intra_proton_transfer(smiles: str, idx1: int, idx2: int):
         mol_obj.GetAtomWithIdx(idx1).GetSymbol(),
         mol_obj.GetAtomWithIdx(idx2).GetSymbol(),
     )
+    max_dist = 2.00
     min_dist = ref.LEN_DCT[symbols_pair] + 0.05
-    scan_path = f"% geom\n   scan\n       B {idx1} {idx2} = 2.00, {min_dist:.2f}, 18\n   end\nend\n"
-    return xyz, scan_path
+    # scan_path = f"% geom\n   scan\n       B {idx1} {idx2} = 2.00, {min_dist:.2f}, 18\n   end\nend\n"
+    return xyz, min_dist, max_dist
 
 
 def beta_cleavage(smiles: str, idx1: int, idx2: int):
