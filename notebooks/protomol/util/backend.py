@@ -6,7 +6,7 @@ from pathlib import Path
 import re
 import sqlite3
 
-from ..rd.mol import from_smiles
+from ..rd.mol import beta_cleavage, from_smiles, intra_proton_transfer
 from ..util.ref import get_ccsdt_parameters
 from .render import from_allxyz_block, from_xyz_block
 
@@ -66,10 +66,18 @@ class Query_SQL:
             for i in range(len(rows))
         ]
 
-    def calculations(smiles: str, method_id: int = None):
+    def calculations(
+        smiles: str, method_id: int = None, idx1: int = None, idx2: int = None
+    ):
         smiles_id = Query_SQL.smiles_id(smiles)
         if method_id:
-            execute = f"SELECT * FROM calculations WHERE smiles_id = {smiles_id} AND method_id = {method_id}"
+            if idx1 or idx2:
+                assert idx1 is not None and idx2 is not None, (
+                    "Must provide two indices when doing an index search."
+                )
+                execute = f"SELECT * FROM calculations WHERE smiles_id = {smiles_id} AND method_id = {method_id} AND scan_idx1 = {idx1} AND scan_idx2 = {idx2}"
+            else:
+                execute = f"SELECT * FROM calculations WHERE smiles_id = {smiles_id} AND method_id = {method_id}"
         else:
             execute = f"SELECT * FROM calculations WHERE smiles_id = {smiles_id}"
         return Query_SQL._execute_query(execute, new_db)
@@ -153,14 +161,14 @@ def write_orca(
     execute = "SELECT functional, method, inp_template, submit_template FROM methods WHERE method_id = ?"
     rows = Query_SQL._execute_query(execute, new_db, method_id)
     functional, method, inp_template, submit_template = rows[0][:]
-    execute = f"SELECT calc_id FROM calculations WHERE smiles_id = {smiles_id} AND method_id = {method_id}"
-    rows = Query_SQL._execute_query(execute, new_db)
-    if len(rows) > 0:
-        raise FileExistsError("Calculation matching indicated values already exists.")
-    calc_id = Append_SQL.calculation(smiles_id, method_id, return_id=True)
-    outdir = Path.home() / f"C5O-Kinetics/calc/{calc_id}"
-    outdir.mkdir(exist_ok=True)
+    rows = Query_SQL.calculations(smiles, method_id, idx1, idx2)
+    # if len(rows) > 0:
+    #     raise FileExistsError("Calculation matching indicated values already exists.")
+
     if idx1 == 0 and idx2 == 0:
+        calc_id = Append_SQL.calculation(smiles_id, method_id, return_id=True)
+        outdir = Path.home() / f"C5O-Kinetics/calc/{calc_id}"
+        outdir.mkdir(exist_ok=True)
         if method == "GOAT":
             execute = "SELECT initial FROM smiles WHERE smiles_text = ?"
             initial_xyz = Query_SQL._execute_query(execute, new_db, smiles)[0][0]
@@ -186,9 +194,11 @@ def write_orca(
         (outdir / "submit.sh").write_text(submit_template)
     else:
         assert idx1 + idx2 > 0, "Please provide indices for the path."
-        assert init_calc_id > 0, (
-            "Must provide an initial calculation id tying to the initial xyz structure for this calculation."
+        calc_id = Append_SQL.calculation(
+            smiles_id, method_id, idx1, idx2, return_id=True
         )
+        outdir = Path.home() / f"C5O-Kinetics/calc/{calc_id}"
+        outdir.mkdir(exist_ok=True)
         substitutions = {
             "[SMILES]": re.sub(r"[^a-zA-Z0-9\s]", "", smiles),
             "[multiplicity]": multiplicity,
@@ -196,15 +206,15 @@ def write_orca(
             "[idx2]": idx2,
         }
         if mechanism.lower() == "proton transfer":
-            initial_xyz, min_dist, max_dist = Query_SQL.xyzs(init_calc_id)
-            substitutions["start"] = min_dist
-            substitutions["end"] = max_dist
+            initial_xyz, min_dist, max_dist = intra_proton_transfer(smiles, idx1, idx2)
+            substitutions["[start]"] = min_dist
+            substitutions["[end]"] = max_dist
             raise ValueError(substitutions)
         elif mechanism.lower() == "beta cleavage":
-            raise NotImplementedError()
-
+            initial_xyz, min_dist, max_dist = beta_cleavage(smiles, idx1, idx2)
+            substitutions["[start]"] = min_dist
+            substitutions["[end]"] = max_dist
         (outdir / "init.xyz").write_text(initial_xyz)
-
         for key, val in substitutions.items():
             inp_template = inp_template.replace(key, str(val))
             submit_template = submit_template.replace(key, str(val))

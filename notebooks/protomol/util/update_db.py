@@ -44,6 +44,7 @@ def refresh():
     execute = "SELECT calc_id FROM traj"
     rows = _execute_query(execute, new_db)
     traj_map = [rows[i][0] for i in range(len(rows))]
+    traj_map = [0]
 
     execute = "SELECT calc_id FROM energies"
     rows = _execute_query(execute, new_db)
@@ -57,14 +58,20 @@ def refresh():
         if calc_id not in xyz_map:
             try:
                 result = [f for f in workdir.rglob("calc.xyz")][0].read_text()
-                execute = "INSERT INTO xyz (calc_id, xyz_text) VALUES (?, ?)"
+                execute = "INSERT OR REPLACE INTO xyz (calc_id, xyz_text) VALUES (?, ?)"
                 _execute_append(execute, (calc_id, result), new_db)
             except Exception:
                 pass
         if calc_id not in traj_map:
             try:
-                result = [f for f in workdir.rglob("calc_trj.xyz")][0].read_text()
-                execute = "INSERT INTO traj (calc_id, traj_text) VALUES (?, ?)"
+                results = [f for f in workdir.rglob("calc.allxyz")]
+                if len(results) == 0:
+                    result = [f for f in workdir.rglob("calc_trj.xyz")][0].read_text()
+                else:
+                    result = results[0].read_text()
+                execute = (
+                    "INSERT OR REPLACE INTO traj (calc_id, traj_text) VALUES (?, ?)"
+                )
                 _execute_append(execute, (calc_id, result), new_db)
             except Exception:
                 pass
@@ -88,7 +95,7 @@ def refresh():
                         result = float(results[0].split()[-1]) * 627.509
                     else:
                         result = 0
-                execute = "INSERT INTO energies (calc_id, energy_value) VALUES (?, ?)"
+                execute = "INSERT OR REPLACE INTO energies (calc_id, energy_value) VALUES (?, ?)"
                 _execute_append(execute, (calc_id, result), new_db)
             except Exception:
                 pass

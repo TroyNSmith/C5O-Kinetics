@@ -66,8 +66,11 @@ def from_xyz_block(xyz_block: str, add_labels: bool = False):
     viewer.show()
 
 
-def from_allxyz_block(allxyz_block):
+def from_allxyz_block(allxyz_block: str):
     viewer = py3Dmol.view()
+    allxyz_block = "\n".join(
+        line for line in allxyz_block.splitlines() if ">" not in line
+    )
     viewer.addModelsAsFrames(allxyz_block, "xyz")
     viewer.setStyle({"stick": {}, "sphere": {"scale": 0.3}})
     viewer.zoomTo()

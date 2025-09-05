@@ -373,9 +373,9 @@ def beta_cleavage(smiles: str, idx1: int, idx2: int):
         mol_obj.GetAtomWithIdx(idx1).GetSymbol(),
         mol_obj.GetAtomWithIdx(idx2).GetSymbol(),
     )
+    max_dist = ref.LEN_DCT[symbols_pair] + 1.25
     min_dist = ref.LEN_DCT[symbols_pair] + 0.05
-    scan_path = f"% geom\n   scan\n       B {idx1} {idx2} = {min_dist:.2f}, {min_dist + 1.2:.2f}, 18\n   end\nend\n"
-    return xyz, scan_path
+    return xyz, min_dist, max_dist
 
 
 # Helper class for working with the bounds matrix
