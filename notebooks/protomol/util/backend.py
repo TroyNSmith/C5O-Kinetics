@@ -59,10 +59,10 @@ class Query_SQL:
             return rows[0][0]
 
     def methods() -> list:
-        execute = "SELECT DISTINCT method, functional, basis, method_id FROM methods"
+        execute = "SELECT DISTINCT method_id, method, functional, basis FROM methods"
         rows = Query_SQL._execute_query(execute, new_db)
         return [
-            (f"{rows[i][0].strip():<20} | {rows[i][1]} {rows[i][2]}", rows[i][3])
+            f"  {rows[i][0]:<10} | {rows[i][1].strip():<15} | {rows[i][2]} {rows[i][3]}"
             for i in range(len(rows))
         ]
 

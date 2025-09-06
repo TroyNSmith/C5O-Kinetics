@@ -1,8 +1,0 @@
-! PAL8
-! wB97X-3c
-! OPTTS
-%geom
-    Calc_Hess true
-end
-
-* xyzfile 0 2 opt.xyz

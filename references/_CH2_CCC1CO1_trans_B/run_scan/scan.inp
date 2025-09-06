@@ -1,9 +1,0 @@
-! PAL8
-! wB97X-3c
-! OPT
-% geom
-    scan
-        B 1 2 = 1.65, 2.55, 18
-    end
-end
-* xyzfile 0 2 opt.xyz
