@@ -1,12 +1,12 @@
 #!/bin/bash
 #SBATCH --partition=batch
-#SBATCH --gres=lscratch:10
-#SBATCH --job-name=OO_GOAT
+#SBATCH --gres=lscratch:20
+#SBATCH --job-name=CH2CCC1CO1_OPT
 #SBATCH --nodes=1
-#SBATCH --ntasks=8
-#SBATCH --ntasks-per-node=8
+#SBATCH --ntasks=16
+#SBATCH --ntasks-per-node=16
 #SBATCH --cpus-per-task=1
-#SBATCH --time=00:30:00
+#SBATCH --time=02:00:00
 #SBATCH --mem-per-cpu=1G
 
 cd ${SLURM_SUBMIT_DIR}

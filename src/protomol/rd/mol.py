@@ -1,0 +1,430 @@
+"""Individual RDKit molecule."""
+
+import numpy as np
+from PIL.Image import Image
+import py3Dmol
+from rdkit import Chem, DistanceGeometry
+from rdkit.Chem import AllChem, Descriptors, Draw, Mol, rdDistGeom, rdmolfiles
+
+from collections import defaultdict
+import copy
+import itertools
+
+from ..util import ref, units
+from ..util.types import NDArray
+
+RDKIT_DISTANCE_UNIT = "angstrom"
+
+
+def beta_cleavage_indices(smiles: str, return_tuple: bool = True):
+    def _alpha_indices(mol: Chem.Mol, rad_indices: list):
+        alpha_indices = set()
+        for idx in rad_indices:
+            atom = mol.GetAtomWithIdx(idx)
+            for neighbor in atom.GetNeighbors():
+                if neighbor.GetSymbol() != "H":
+                    alpha_indices.add(neighbor.GetIdx())
+        return list(alpha_indices)
+
+    def _beta_indices(mol: Chem.Mol, rad_indices: list, alpha_indices: list):
+        beta_indices = set()
+        for idx in alpha_indices:
+            atom = mol.GetAtomWithIdx(idx)
+            for neighbor in atom.GetNeighbors():
+                if neighbor.GetSymbol() != "H" and neighbor.GetIdx() not in rad_indices:
+                    beta_indices.add(neighbor.GetIdx())
+        return list(beta_indices)
+
+    mol = from_smiles(smiles)
+    rad_indices = [
+        atom.GetIdx() for atom in mol.GetAtoms() if atom.GetNumRadicalElectrons() > 0
+    ]
+    alpha_indices = _alpha_indices(mol, rad_indices)
+    beta_indices = _beta_indices(mol, rad_indices, alpha_indices)
+
+    if return_tuple:
+        alpha_tuples = []
+        beta_tuples = []
+        for idx in alpha_indices:
+            alpha_tuples.append((f"{mol.GetAtomWithIdx(idx).GetSymbol()}:{idx}", idx))
+        for idx in beta_indices:
+            beta_tuples.append((f"{mol.GetAtomWithIdx(idx).GetSymbol()}:{idx}", idx))
+        return alpha_tuples, beta_tuples
+
+    return alpha_indices, beta_indices
+
+
+def radical_indices(smiles: str, return_tuple: bool = True):
+    mol = from_smiles(smiles)
+    rad_indices = [
+        atom.GetIdx() for atom in mol.GetAtoms() if atom.GetNumRadicalElectrons() > 0
+    ]
+    proton_indices = [
+        atom.GetIdx() for atom in mol.GetAtoms() if atom.GetSymbol() == "H"
+    ]
+    if return_tuple:
+        rad_tuples = []
+        proton_tuples = []
+        for idx in rad_indices:
+            rad_tuples.append((f"{mol.GetAtomWithIdx(idx).GetSymbol()}:{idx}", idx))
+        for idx in proton_indices:
+            proton_tuples.append((f"{mol.GetAtomWithIdx(idx).GetSymbol()}:{idx}", idx))
+        return rad_tuples, proton_tuples
+    return rad_indices, proton_indices
+
+
+def _get_radical_indices(
+    smiles: str = None, xyz_block: str = None, mol: Chem.Mol = None
+):
+    if smiles is not None:
+        mol = Chem.AddHs(Chem.MolFromSmiles(smiles))
+        AllChem.EmbedMolecule(mol)
+    elif xyz_block is not None:
+        mol = Chem.MolFromXYZBlock(xyz_block)
+
+    radicals = [a.GetIdx() for a in mol.GetAtoms() if a.GetNumRadicalElectrons() != 0]
+    return radicals
+
+
+def map_atomic_symbols_to_indices(
+    smiles: str, return_tuple: bool = True
+) -> list[tuple]:
+    mol = Chem.MolFromSmiles(smiles)
+    mol = Chem.AddHs(mol)
+    AllChem.EmbedMolecule(mol)
+    indices = [atom.GetIdx() for atom in mol.GetAtoms()]
+    if return_tuple:
+        identifiers = [f"{atom.GetSymbol()}:{atom.GetIdx()}" for atom in mol.GetAtoms()]
+        tuples = [(identifiers[i], indices[i]) for i in range(len(indices))]
+        return tuples
+
+    return indices
+
+
+def from_smiles(smi: str, with_coords: bool = False) -> Mol:
+    """Generate an RDKit molecule from SMILES.
+
+    :param smi: SMILES string
+    :param with_coords: Whether to add coordinates
+    :return: RDKit molecule
+    """
+    mol = Chem.MolFromSmiles(smi)
+    mol = Chem.AddHs(mol)
+    if with_coords:
+        mol = with_coordinates(mol)
+    return mol
+
+
+def smiles_to_xyz_block(smi: str) -> str:
+    mol = Chem.MolFromSmiles(smi)
+    mol = Chem.AddHs(mol)
+    mol = with_coordinates(mol)
+    return Chem.MolToXYZBlock(mol)
+
+
+# properties
+def symbols(mol: Mol) -> list[str]:
+    """Get atomic symbols.
+
+    :param mol: RDKit molecule
+    :return: Symbols
+    """
+    return [atom.GetSymbol() for atom in mol.GetAtoms()]
+
+
+def coordinates(mol: Mol, unit: str = units.DISTANCE_UNIT) -> NDArray | None:
+    """Get atomic coordinates.
+
+    Requires an embedded molecule (otherwise, returns None).
+
+    :param mol: RDKit molecule
+    :return: Coordinates
+    """
+    if not has_coordinates(mol):
+        return None
+
+    natms = mol.GetNumAtoms()
+    conf = mol.GetConformer()
+    coords = [conf.GetAtomPosition(i) for i in range(natms)]
+    coords = np.array(coords, dtype=np.float64)
+    return coords * units.distance_conversion(RDKIT_DISTANCE_UNIT, unit)
+
+
+def charge(mol: Mol) -> int:
+    """Get molecular charge.
+
+    :param mol: RDKit molecule
+    :return: Charge
+    """
+    return Chem.GetFormalCharge(mol)
+
+
+def spin(mol: Mol) -> int:
+    """Determine (or guess) molecular spin.
+
+    spin = number of unpaired electrons = multiplicity - 1
+
+    TODO: Add flags to decide between high- and low-spin guess where ambiguous.
+
+    :param mol: RDKit molecule
+    :return: Spin
+    """
+    return Descriptors.NumRadicalElectrons(mol)
+
+
+# boolean properties
+def has_coordinates(mol: Mol) -> bool:
+    """Determine if RDKit molecule has coordinates.
+
+    :param mol: RDKit molecule
+    :return: `True` if it does, `False` if not
+    """
+    return bool(mol.GetNumConformers())
+
+
+# convert
+def image(
+    mol: Mol, *, label: bool = True, num_dct: dict[int, int] | None = None
+) -> Image:
+    """Generate a display-able image.
+
+    If label=True but no mapping is specified, the flat indices will be used.
+
+    :param mols: RDKit molecules
+    :param label: Whether to label the atoms
+    :param mapping: An alternative mapping
+    :return: PIL Image
+    """
+    if label or num_dct is not None:
+        mol = with_numbers(mol, num_dct=num_dct, in_place=False)
+
+    return Draw.MolToImage(mol)
+
+
+def view(
+    mol: Mol, *, label: bool = True, width: int = 600, height: int = 450
+) -> py3Dmol.view:
+    """View molecule as a 3D structure.
+
+    :param geo: Geometry
+    :param width: Width
+    :param height: Height
+    """
+    xyz_str = Chem.MolToXYZBlock(mol)
+
+    viewer = py3Dmol.view(width=width, height=height)
+    viewer.addModel(xyz_str, "xyz")
+    viewer.setStyle({"stick": {}, "sphere": {"scale": 0.3}})
+
+    if label:
+        for idx in range(mol.GetNumAtoms()):
+            viewer.addLabel(
+                idx,
+                {
+                    "backgroundOpacity": 0.0,
+                    "fontColor": "black",
+                    "alignment": "center",
+                    "inFront": True,
+                },
+                {"index": idx},
+            )
+
+    viewer.zoomTo()
+    return viewer
+
+
+def xyz_string(mol: Mol) -> str:
+    """Generate an XYZ string from an RDKit molecule.
+
+    :param mol: RDKit molecule
+    :return: XYZ string
+    """
+    return rdmolfiles.MolToXYZBlock(mol)
+
+
+# transformations
+def with_numbers(
+    mol: Mol, num_dct: dict[int, int] | None = None, in_place: bool = False
+) -> Mol:
+    """Add atom numbers to RDKit molecule.
+
+    If no numbers dictionary is specified, the atom indices will be used.
+
+    :param mol: RDKit molecule
+    :param num_dct: Alternative numbers to use, by atom index
+    :param in_place: Whether to modify the molecule in place
+    :return: RDKit molecule
+    """
+    mol = mol if in_place else copy.deepcopy(mol)
+    for atom_idx, atom in enumerate(mol.GetAtoms()):
+        num = atom_idx if num_dct is None else num_dct[atom_idx]
+        atom.SetProp("molAtomMapNumber", str(num))
+        # # This doesn't work because a value of 0 clears the property:
+        # atom.SetAtomMapNum(num)
+    return mol
+
+
+def with_coordinates(
+    mol: Mol, in_place: bool = False, bmat: np.ndarray | None = None
+) -> Mol:
+    """Add coordinates to RDKit molecule, if missing.
+
+    :param mol: RDKit molecule
+    :param in_place: Whether to modify the molecule in place
+    :return: RDKit molecule
+    """
+    if bmat is not None or not has_coordinates(mol):
+        mol = mol if in_place else copy.deepcopy(mol)
+
+        # Set Distance Geometry (DG) bounds matrix
+        bmat = dg_bounds_matrix(mol) if bmat is None else bmat
+        params = rdDistGeom.ETKDGv3()
+        params.SetBoundsMat(bmat)
+
+        rdDistGeom.EmbedMolecule(mol, params=params)
+    return mol
+
+
+def neighbors(mol: Mol) -> dict[int, list[int]]:
+    """Determine neighbor atoms.
+
+    :param mol: RDKit molecule
+    :return: Mapping of atoms onto their neighbors
+    """
+    neighbor_dct = defaultdict(list)
+    for bond in mol.GetBonds():
+        idx1 = bond.GetBeginAtomIdx()
+        idx2 = bond.GetEndAtomIdx()
+        neighbor_dct[idx1].append(idx2)
+        neighbor_dct[idx2].append(idx1)
+    return dict(neighbor_dct)
+
+
+# edit geometries
+def dg_bounds_matrix(mol: Mol) -> np.ndarray:
+    """Get Distance Geometry (DG) bounds matrix.
+
+    The lower triangle contains lower bounds, while the upper triangle contains
+    upper bounds.
+
+    :param mol: RDKit molecule
+    :return: Distance geometry bounds matrix
+    """
+    return rdDistGeom.GetMoleculeBoundsMatrix(mol)
+
+
+def dg_bounds_set_dist(
+    mol: Mol, idx1: int, idx2: int, value: float = 2.0, bmat: np.ndarray | None = None
+) -> np.ndarray:
+    r"""Change distance in Distance Geometry (DG) bounds.
+
+    Dependent neighbors are adjusted based on the law of cosines:
+
+        c = sqrt(a^2 + b0^2 - 2 a b0 cos(g))
+
+        cos(g) = (a0^2 + b0^2 - c0^2) / (2 a0 b0)
+
+                           1
+               1           |\
+            a0 |\  c0    a | \ c
+               |g \        |g \
+               2---3       2---3
+                 b0          b0
+
+    :param mol: RDKit molecule
+    :param idx1: Atom 1 index
+    :param idx2: Atom 2 index
+    :param value: Value of change; positive -> increase, negative -> decrease
+    :param bounds: Optionally pass in bounds matrix to update
+    :return: Updated distance geometry bounds matrix
+    """
+    bmat0 = dg_bounds_matrix(mol) if bmat is None else bmat
+    bmat = bmat0.copy()
+
+    # 1. Set main distance
+    bmat[idx1, idx2] = value
+    bmat[idx2, idx1] = value
+
+    # 2. If 1 and 2 are connected, identify dependent neighbors and adjust their distances
+    neighbor_dct = neighbors(mol)
+    if idx1 in neighbor_dct[idx2]:
+        ring_info = mol.GetRingInfo()
+        rings = list(map(set, ring_info.AtomRings()))
+
+        bounds0 = Bounds(bmat0)
+        bounds = Bounds(bmat)
+        for i1, i2 in itertools.permutations((idx1, idx2)):
+            for i3 in neighbor_dct[i2]:
+                is_in_ring = any({i1, i2, i3} <= ring for ring in rings)
+                if i3 != idx1 and not is_in_ring:
+                    for lower in (True, False):
+                        a0 = bounds0.get(i1, i2, lower=lower)
+                        b0 = bounds0.get(i2, i3, lower=lower)
+                        c0 = bounds0.get(i1, i3, lower=lower)
+                        a = bounds.get(i1, i2, lower=lower)
+                        cos_g = (a0**2 + b0**2 - c0**2) / (2 * a0 * b0)
+                        c = np.sqrt(a**2 + b0**2 - 2 * a * b0 * cos_g)
+                        bounds.set(i1, i3, c, lower=lower)
+
+        bmat = bounds.matrix
+
+    # 3. Do triangle smoothing
+    DistanceGeometry.DoTriangleSmoothing(bmat)
+    return bmat
+
+
+def intra_proton_transfer(smiles: str, idx1: int, idx2: int):
+    mol_obj = from_smiles(smiles)  # Initialize mol from SMILES string
+    mol_obj = with_coordinates(mol_obj)  # Assign initial coordinates to mol
+    bmat = dg_bounds_set_dist(
+        mol_obj, idx1, idx2
+    )  # Calculate a new coordinates matrix with the updated idx1:idx2 distance
+    mol_obj = with_coordinates(mol_obj, bmat=bmat)  # Assign new coordinates to output
+    xyz = Chem.MolToXYZBlock(mol_obj)
+    symbols_pair = (
+        mol_obj.GetAtomWithIdx(idx1).GetSymbol(),
+        mol_obj.GetAtomWithIdx(idx2).GetSymbol(),
+    )
+    max_dist = 2.00
+    min_dist = ref.LEN_DCT[symbols_pair] + 0.05
+    # scan_path = f"% geom\n   scan\n       B {idx1} {idx2} = 2.00, {min_dist:.2f}, 18\n   end\nend\n"
+    return xyz, min_dist, max_dist
+
+
+def beta_cleavage(smiles: str, idx1: int, idx2: int):
+    mol_obj = from_smiles(smiles)
+    mol_obj = with_coordinates(mol_obj)
+    xyz = Chem.MolToXYZBlock(mol_obj)
+    symbols_pair = (
+        mol_obj.GetAtomWithIdx(idx1).GetSymbol(),
+        mol_obj.GetAtomWithIdx(idx2).GetSymbol(),
+    )
+    max_dist = ref.LEN_DCT[symbols_pair] + 1.25
+    min_dist = ref.LEN_DCT[symbols_pair] + 0.05
+    return xyz, min_dist, max_dist
+
+
+# Helper class for working with the bounds matrix
+class Bounds:
+    def __init__(self, bmat: np.ndarray):
+        """Initialize bounds matrix"""
+        self.bmat = bmat
+
+    @property
+    def matrix(self) -> np.ndarray:
+        """Bounds matrix"""
+        return self.bmat
+
+    def get(self, idx1: int, idx2: int, lower: bool = False) -> float:
+        """Get upper or lower bound value."""
+        idx1, idx2 = sorted((idx1, idx2))
+        if lower:
+            return self.bmat[idx2, idx1]
+        return self.bmat[idx1, idx2]
+
+    def set(self, idx1: int, idx2: int, value: float, lower: bool = False) -> None:
+        """Set upper or lower bound value."""
+        idx1, idx2 = sorted((idx1, idx2))
+        if lower:
+            self.bmat[idx2, idx1] = value
+        self.bmat[idx1, idx2] = value

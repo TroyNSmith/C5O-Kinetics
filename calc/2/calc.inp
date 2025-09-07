@@ -1,4 +1,4 @@
-%PAL NPROCS 8 END
+%PAL NPROCS 16 END
 %maxcore 750
-! XTB GOAT
-* xyzfile 0 3 init.xyz
+! REVDSD-PBEP86-D4/2021 def2-TZVPP def2-TZVPP/c OPT NumFreq
+* xyzfile 0 2 init.xyz

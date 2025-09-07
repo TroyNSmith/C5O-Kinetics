@@ -1,7 +1,0 @@
-#!/bin/bash
-
-cd "[workdir]"/REV
-revdsd_id=$(sbatch submit.sh | awk '{{print $NF}}')
-
-cd "[workdir]"/CCS
-sbatch --dependency=afterok:$revdsd_id submit.sh

@@ -36,11 +36,11 @@ sqlite = "*"
 pint = ">=0.25,<0.26"
 pydantic = ">=2.11.7,<3"
 
-[tool.pixi.tasks.energy]
-args = [
-    { "arg" = "smiles" },
-]
-cmd = "python .scripts/energy.py '{{ smiles }}'"
+[tool.pixi.tasks.dump]
+cmd = "bash .scripts/dump.sh"
+
+[tool.pixi.tasks.refresh]
+cmd = "bash .scripts/refresh.sh"
 
 [tool.ruff]
 line-length = 88

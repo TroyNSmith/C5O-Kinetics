@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --partition=batch
 #SBATCH --gres=lscratch:10
-#SBATCH --job-name=CC_GOAT
+#SBATCH --job-name=CH2CCC1CO1_GOAT
 #SBATCH --nodes=1
 #SBATCH --ntasks=8
 #SBATCH --ntasks-per-node=8
