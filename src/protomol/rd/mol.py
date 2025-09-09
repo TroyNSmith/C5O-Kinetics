@@ -9,14 +9,17 @@ from rdkit.Chem import AllChem, Descriptors, Draw, Mol, rdDistGeom, rdmolfiles
 from collections import defaultdict
 import copy
 import itertools
+from pathlib import Path
+import sys
 
-from ..util import ref, units
-from ..util.types import NDArray
+sys.path.insert(0, str(Path.cwd().parent))
+from util import ref, units
+from util.types import NDArray
 
 RDKIT_DISTANCE_UNIT = "angstrom"
 
 
-def beta_cleavage_indices(smiles: str, return_tuple: bool = True):
+def beta_cleavage_indices(smiles: str, return_tuple: bool = False):
     def _alpha_indices(mol: Chem.Mol, rad_indices: list):
         alpha_indices = set()
         for idx in rad_indices:
@@ -54,7 +57,7 @@ def beta_cleavage_indices(smiles: str, return_tuple: bool = True):
     return alpha_indices, beta_indices
 
 
-def radical_indices(smiles: str, return_tuple: bool = True):
+def proton_transfer_indices(smiles: str, return_tuple: bool = False):
     mol = from_smiles(smiles)
     rad_indices = [
         atom.GetIdx() for atom in mol.GetAtoms() if atom.GetNumRadicalElectrons() > 0
@@ -399,8 +402,8 @@ def beta_cleavage(smiles: str, idx1: int, idx2: int):
         mol_obj.GetAtomWithIdx(idx1).GetSymbol(),
         mol_obj.GetAtomWithIdx(idx2).GetSymbol(),
     )
-    max_dist = ref.LEN_DCT[symbols_pair] + 1.25
     min_dist = ref.LEN_DCT[symbols_pair] + 0.05
+    max_dist = ref.LEN_DCT[symbols_pair] + 0.30
     return xyz, min_dist, max_dist
 
 

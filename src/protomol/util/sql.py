@@ -1,3 +1,5 @@
+import numpy as np
+
 from pathlib import Path
 import sqlite3
 from typing import Optional, Union
@@ -55,12 +57,12 @@ def extract_energy_from_log(log_text: str) -> float:
     lines = log_text.splitlines()
 
     zpe_lines = [line for line in lines if "Zero point energy" in line]
-    if len(zpe_lines) == 1:
-        return float(zpe_lines[0].split()[-2])
+    if len(zpe_lines) in (1, 2):
+        return float(zpe_lines[-1].split()[-2])
 
-    sp_lines = [line for line in lines if "FINAL SINGLE POINT ENERGY" in line]
-    if len(sp_lines) == 1:
-        return float(sp_lines[0].split()[-1]) * 627.509  # Convert Hartree to kcal/mol
+    spc_lines = [line for line in lines if "FINAL SINGLE POINT ENERGY" in line]
+    if len(spc_lines) == 1:
+        return float(spc_lines[0].split()[-1]) * 627.509  # Convert Hartree to kcal/mol
 
     return 0.0
 
@@ -68,7 +70,7 @@ def extract_energy_from_log(log_text: str) -> float:
 def refresh():
     xyz_ids = get_existing_calc_ids("xyz")
     traj_ids = get_existing_calc_ids("traj")
-    energy_ids = get_existing_calc_ids("energies")
+    imaginary_ids = get_existing_calc_ids("imaginaryfrequencies")
     calc_ids = get_existing_calc_ids("calculations")
 
     # xyz_ids = []
@@ -83,57 +85,63 @@ def refresh():
             xyz_file = next(workdir.rglob("calc.allxyz"), None)
             if xyz_file is None:
                 xyz_file = next(workdir.rglob("calc.xyz"), None)
+                selected_step = 0
             if xyz_file:
                 xyz_text = read_file_or_none(xyz_file)
-                if xyz_text:
-                    if "Scan Step" in xyz_text:
-                        try:
-                            lines = xyz_text.splitlines()
+                if xyz_text is not None and "Scan Step" in xyz_text:
+                    lines = xyz_text.splitlines()
 
-                            # Extract steps and energies
-                            steps = [
-                                int(line.split()[-3])
-                                for line in lines
-                                if "Scan Step" in line
-                            ]
-                            energies = [
-                                float(line.split()[-1])
-                                for line in lines
-                                if "Scan Step" in line
-                            ]
-
-                            # Find the step with maximum energy
-                            max_index = energies.index(max(energies))
-                            max_step = steps[max_index]
-
-                            # Determine number of digits from filenames, fallback to 3 digits
-                            step_files = list(workdir.glob("calc.*.xyz"))
-                            if step_files:
-                                num_digits = max(
-                                    len(f.stem.split(".")[-1])
-                                    for f in step_files
-                                    if f.stem.split(".")[-1].isdigit()
-                                )
+                    # Extract steps and energies
+                    steps = [
+                        int(line.split()[-3]) for line in lines if "Scan Step" in line
+                    ]
+                    energies = [
+                        float(line.split()[-1]) for line in lines if "Scan Step" in line
+                    ]
+                    # Detect sudden drops in energy (proton transfer)
+                    energy_diffs = np.diff(energies)
+                    sudden_drop_indices = np.where(energy_diffs < -0.005)[0]
+                    if len(sudden_drop_indices) > 0:
+                        # Pick the step just before the drop
+                        drop_idx = sudden_drop_indices[0]
+                        ts_idx = drop_idx
+                    else:
+                        # Identify critical points
+                        first_derivative = np.gradient(energies)
+                        second_derivative = np.gradient(first_derivative)
+                        first_signs = np.sign(first_derivative)
+                        cp_indices = np.where(np.diff(first_signs) < 0)[0]
+                        if len(cp_indices):
+                            # Second derivative test
+                            if second_derivative[cp_indices[0]] < 0:
+                                ts_idx = cp_indices[0]
                             else:
-                                num_digits = 3  # fallback
+                                raise ValueError("Identified local minima of energy.")
+                        else:
+                            # Identify inflections from second derivative
+                            second_signs = np.sign(second_derivative)
+                            flip_indices = np.where(np.diff(second_signs) < 0)[0]
+                            if len(flip_indices):
+                                ts_idx = flip_indices[0]
+                            else:
+                                ts_idx = np.argmax(energies)  # Fallback clause
 
-                            # Format the step number with leading zeros
-                            step_str = str(max_step).zfill(num_digits)
-                            step_xyz_file = workdir / f"calc.{step_str}.xyz"
+                    selected_step = steps[ts_idx]
+                    step_str = str(selected_step).zfill(3)
+                    step_xyz_file = next(workdir.rglob(f"calc.{step_str}.xyz"), None)
 
-                            # Read and use that specific step file if it exists
-                            step_xyz_text = read_file_or_none(step_xyz_file)
-                            if step_xyz_text:
-                                xyz_text = step_xyz_text  # override with highest-energy structure
-                        except Exception as e:
-                            print(f"Failed to process scan: {e}")
+                    try:
+                        xyz_text = read_file_or_none(step_xyz_file)
+                    except Exception as e:
+                        raise e
 
-                    execute_append(
-                        "INSERT OR REPLACE INTO xyz (calc_id, xyz_text) VALUES (?, ?)",
-                        (calc_id, xyz_text),
-                        db,
-                    )
+                execute_append(
+                    "INSERT OR REPLACE INTO xyz (calc_id, selected_step, xyz_text) VALUES (?, ?, ?)",
+                    (calc_id, selected_step, xyz_text),
+                    db,
+                )
         # === Energy from log file ===
+        energy_ids = get_existing_calc_ids("energies")
         if calc_id not in energy_ids:
             log_file = next(workdir.rglob("calc.log"), None)
             if log_file:
@@ -141,7 +149,7 @@ def refresh():
                 if log_text:
                     energy = extract_energy_from_log(log_text)
                     execute_append(
-                        "INSERT OR REPLACE INTO energies (calc_id, energy_value) VALUES (?, ?)",
+                        "INSERT INTO energies (calc_id, energy_value) VALUES (?, ?)",
                         (calc_id, energy),
                         db,
                     )
@@ -178,5 +186,19 @@ def refresh():
                 execute_append(
                     "INSERT OR REPLACE INTO traj (calc_id, traj_text) VALUES (?, ?)",
                     (calc_id, traj_text),
+                    db,
+                )
+        if calc_id not in imaginary_ids:
+            imag_file = next(workdir.rglob("imaginary.xyz"), None)
+            xyz_text = read_file_or_none(imag_file) if imag_file else None
+
+            if xyz_text:
+                lines = xyz_text.splitlines()
+                frequency = [
+                    float(line.split()[-1]) for line in lines if "Frequency" in line
+                ]
+                execute_append(
+                    "INSERT OR REPLACE INTO imaginaryfrequencies (calc_id, frequency, xyz) VALUES (?, ?, ?)",
+                    (calc_id, frequency[0], xyz_text),
                     db,
                 )

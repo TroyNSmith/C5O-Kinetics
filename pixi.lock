@@ -1858,9 +1858,9 @@ packages:
   size: 271841
   timestamp: 1744724188108
 - pypi: ./
-  name: protopilot
+  name: protomol
   version: 0.1.0
-  sha256: ae947dcf19a27f51bb90f2ca52119edc49af6e557a07063a32e0de0701a20520
+  sha256: 63eec7e3aff5381ef93aa33377a958773d567435f79c3c40fb6b4edf34d3063b
   requires_python: '>=3.11'
   editable: true
 - conda: https://conda.anaconda.org/conda-forge/linux-64/psutil-7.0.0-py312h4c3975b_1.conda

@@ -9,5 +9,5 @@ def visualize_scan_energy(steps: list, energies: list):
         ax.text(x, y, f"{x}", fontsize=8)
     ax.set_xlabel("Step")
     ax.set_ylabel("Energy")
-    ax.set_xticks([3 * i for i in range(0, 7)])
+    ax.set_xticks([2 * i for i in range(0, 15)])
     plt.show()

@@ -17,6 +17,13 @@ LEN_DCT = {
     ("Cl", "Cl"): 2.0,
 }
 
+METHOD_MAP = {
+    "GOAT": ["OPT NumFreq"],
+    "OPT NumFreq": ["CALC", "OPT SCAN"],
+    "OPT SCAN": ["OPTTS NumFreq"],
+    "OPTTS NumFreq": ["CALC"],
+}
+
 
 def get_ccsdt_parameters(num_heavy_atoms: int) -> dict:
     num_cpus = [0, 4, 4, 12, 12, 16, 20, 20, 20]
@@ -37,7 +44,7 @@ def get_ccsdt_parameters(num_heavy_atoms: int) -> dict:
     return {
         "[num_cpus]": num_cpus[idx],
         "[mem_per_cpu]": mem_per_cpu[idx],
-        "[input_mem_per_cpu]": int(mem_per_cpu[idx] * .75),
+        "[input_mem_per_cpu]": int(mem_per_cpu[idx] * 0.75),
         "[lscratch_size]": lscratch_size[idx],
         "[time_requested]": time_requested[idx],
     }

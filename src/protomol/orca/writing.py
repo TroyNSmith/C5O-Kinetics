@@ -68,7 +68,7 @@ def write_orca(
     # --- Insert new calculation row ---
     calc_id = int(
         execute_append(
-            "INSERT INTO calculations (smiles_id, method_id, scan_idx1, scan_idx2) VALUES (?, ?, ?, ?)",
+            "INSERT OR REPLACE INTO calculations (smiles_id, method_id, scan_idx1, scan_idx2) VALUES (?, ?, ?, ?)",
             (smiles_id, method_id, idx1, idx2),
             db,
             return_id=True,
@@ -91,11 +91,12 @@ def write_orca(
         substitutions |= get_ccsdt_parameters(smiles.count("C") + smiles.count("O"))
 
     # --- If a scan is involved, compute scan-specific distances ---
-    if idx1 != -1 and idx2 != -1:
-        assert mechanism, "Provide a reaction mechanism."
+    if mechanism:
+        assert idx1 >= 0, f"{idx1} is not a valid index."
+        assert idx2 >= 0, f"{idx2} is not a valid index."
 
         if mechanism.lower() == "proton transfer":
-            initial_xyz, min_dist, max_dist = intra_proton_transfer(smiles, idx1, idx2)
+            initial_xyz, max_dist, min_dist = intra_proton_transfer(smiles, idx1, idx2)
         elif mechanism.lower() == "beta cleavage":
             initial_xyz, min_dist, max_dist = beta_cleavage(smiles, idx1, idx2)
         else:
@@ -103,11 +104,6 @@ def write_orca(
 
         substitutions["[start]"] = min_dist
         substitutions["[end]"] = max_dist
-
-    elif idx1 != -1 or idx2 != -1:
-        raise ValueError(
-            f"Expected two real reaction indices, got {idx1} and {idx2} instead."
-        )
 
     # --- Perform substitutions ---
     for key, val in substitutions.items():
