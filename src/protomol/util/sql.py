@@ -90,7 +90,6 @@ def refresh():
                 xyz_text = read_file_or_none(xyz_file)
                 if xyz_text is not None and "Scan Step" in xyz_text:
                     lines = xyz_text.splitlines()
-
                     # Extract steps and energies
                     steps = [
                         int(line.split()[-3]) for line in lines if "Scan Step" in line
@@ -98,34 +97,45 @@ def refresh():
                     energies = [
                         float(line.split()[-1]) for line in lines if "Scan Step" in line
                     ]
-                    # Detect sudden drops in energy (proton transfer)
-                    energy_diffs = np.diff(energies)
-                    sudden_drop_indices = np.where(energy_diffs < -0.005)[0]
-                    if len(sudden_drop_indices) > 0:
-                        # Pick the step just before the drop
-                        drop_idx = sudden_drop_indices[0]
-                        ts_idx = drop_idx
-                    else:
-                        # Identify critical points
+
+                    def identify_ts_index(energies: list[float]) -> int:
                         first_derivative = np.gradient(energies)
                         second_derivative = np.gradient(first_derivative)
+
+                        # Local maxima (sudden drop)
+                        energy_diffs = np.diff(energies)
+                        sudden_drop_indices = np.where(energy_diffs < -0.004)[0]
+
+                        # Local maxima (concave down)
                         first_signs = np.sign(first_derivative)
                         cp_indices = np.where(np.diff(first_signs) < 0)[0]
-                        if len(cp_indices):
-                            # Second derivative test
-                            if second_derivative[cp_indices[0]] < 0:
-                                ts_idx = cp_indices[0]
-                            else:
-                                raise ValueError("Identified local minima of energy.")
-                        else:
-                            # Identify inflections from second derivative
-                            second_signs = np.sign(second_derivative)
-                            flip_indices = np.where(np.diff(second_signs) < 0)[0]
-                            if len(flip_indices):
-                                ts_idx = flip_indices[0]
-                            else:
-                                ts_idx = np.argmax(energies)  # Fallback clause
 
+                        # Inflection point
+                        second_signs = np.sign(second_derivative)
+                        flip_indices = np.where(np.diff(second_signs) < 0)[0]
+
+                        for idx in cp_indices:
+                            if second_derivative[idx] < 0:
+                                if idx + 1 not in sudden_drop_indices:
+                                    return idx
+
+                        for idx in sudden_drop_indices:
+                            # Prefer the point AFTER the drop, if concave down
+                            if 0 < idx + 1 < len(second_derivative) - 1:
+                                if (
+                                    second_derivative[idx] < 0
+                                    and second_derivative[idx + 1] < 0
+                                ):
+                                    return idx
+
+                        if len(flip_indices):
+                            idx = flip_indices[0]
+                            return idx
+
+                        # -------- Fallback: Max energy --------
+                        return int(np.argmax(energies))
+
+                    ts_idx = identify_ts_index(energies)
                     selected_step = steps[ts_idx]
                     step_str = str(selected_step).zfill(3)
                     step_xyz_file = next(workdir.rglob(f"calc.{step_str}.xyz"), None)

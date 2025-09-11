@@ -1,12 +1,12 @@
 """Multiple RDKit molecules."""
 
-from collections.abc import Iterator, Mapping, Sequence
-from typing import TypeVar
-
 import networkx as nx
 from networkx.algorithms.isomorphism import GraphMatcher
 from PIL.Image import Image
 from rdkit.Chem import Draw, Mol, rdChemReactions
+
+from collections.abc import Iterator, Mapping, Sequence
+from typing import TypeVar
 
 from . import mol as m_
 
@@ -58,7 +58,10 @@ def image(
     if label or mapping is not None:
         mols = with_flat_index_numbers(mols, mapping=mapping, in_place=False)
 
-    return Draw.MolsToImage(mols)
+    if len(mols) > 1:
+        return Draw.MolsToImage(mols)
+    else:
+        return Draw.MolToImage(mols[0])
 
 
 # transformations
@@ -76,10 +79,13 @@ def with_flat_index_numbers(
     """
     mapping = mapping or {k: k for k in atom_keys(mols)}
     num_dcts = atom_keys_split_dict_input(atom_keys_flatten_dict_output(mapping))
-    return tuple(
-        m_.with_numbers(mol, num_dct=num_dct, in_place=in_place)
-        for mol, num_dct in zip(mols, num_dcts, strict=True)
-    )
+    if len(mols) > 1:
+        return tuple(
+            m_.with_numbers(mol, num_dct=num_dct, in_place=in_place)
+            for mol, num_dct in zip(mols, num_dcts, strict=True)
+        )
+    else:
+        return tuple(m_.with_numbers(mols[0], num_dct=num_dcts, in_place=in_place))
 
 
 # conversions

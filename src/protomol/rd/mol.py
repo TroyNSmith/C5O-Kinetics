@@ -379,10 +379,20 @@ def dg_bounds_set_dist(
 def intra_proton_transfer(smiles: str, idx1: int, idx2: int):
     mol_obj = from_smiles(smiles)  # Initialize mol from SMILES string
     mol_obj = with_coordinates(mol_obj)  # Assign initial coordinates to mol
-    bmat = dg_bounds_set_dist(
-        mol_obj, idx1, idx2
-    )  # Calculate a new coordinates matrix with the updated idx1:idx2 distance
-    mol_obj = with_coordinates(mol_obj, bmat=bmat)  # Assign new coordinates to output
+    value = 2.0
+    while True:
+        try:
+            bmat = dg_bounds_set_dist(
+                mol_obj, idx1, idx2, value
+            )  # Calculate a new coordinates matrix with the updated idx1:idx2 distance
+            mol_obj = with_coordinates(
+                mol_obj, bmat=bmat
+            )  # Assign new coordinates to output
+            break
+        except RuntimeError:
+            value += 0.05
+        except Exception as e:
+            raise RuntimeError(f"Got an unexpected error: {e}")
     xyz = Chem.MolToXYZBlock(mol_obj)
     symbols_pair = (
         mol_obj.GetAtomWithIdx(idx1).GetSymbol(),
@@ -390,21 +400,19 @@ def intra_proton_transfer(smiles: str, idx1: int, idx2: int):
     )
     max_dist = 2.00
     min_dist = ref.LEN_DCT[symbols_pair] + 0.05
-    # scan_path = f"% geom\n   scan\n       B {idx1} {idx2} = 2.00, {min_dist:.2f}, 18\n   end\nend\n"
     return xyz, min_dist, max_dist
 
 
 def beta_cleavage(smiles: str, idx1: int, idx2: int):
-    mol_obj = from_smiles(smiles)
-    mol_obj = with_coordinates(mol_obj)
+    mol_obj = from_smiles(smiles)  # Initialize mol from SMILES string
+    mol_obj = with_coordinates(mol_obj)  # Assign initial coordinates to mol
+    bmat = dg_bounds_set_dist(
+        mol_obj, idx1, idx2, 2.5
+    )  # Calculate a new coordinates matrix with the updated idx1:idx2 distance
+    mol_obj = with_coordinates(mol_obj, bmat=bmat)  # Assign new coordinates to output
     xyz = Chem.MolToXYZBlock(mol_obj)
-    symbols_pair = (
-        mol_obj.GetAtomWithIdx(idx1).GetSymbol(),
-        mol_obj.GetAtomWithIdx(idx2).GetSymbol(),
-    )
-    min_dist = ref.LEN_DCT[symbols_pair] + 0.05
-    max_dist = ref.LEN_DCT[symbols_pair] + 0.30
-    return xyz, min_dist, max_dist
+    max_dist = 2.00
+    return xyz, max_dist
 
 
 # Helper class for working with the bounds matrix

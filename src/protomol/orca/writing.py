@@ -104,7 +104,7 @@ def write_orca(
 
         substitutions["[start]"] = min_dist
         substitutions["[end]"] = max_dist
-
+    
     # --- Perform substitutions ---
     for key, val in substitutions.items():
         inp_template = inp_template.replace(key, str(val))

@@ -24,12 +24,12 @@ def display_methods_table(method_dict: dict[int, str], title: str):
 
 
 @cli.command()
-@click.option("-smi", "--smiles", "smiles", help="Input corresponding SMILES string")
-def optimize(smiles: str):
+def optimize():
     """Generate an ORCA command for a given SMILES string."""
     db = Path.home() / "C5O-Kinetics/db/data.db"
     conn = sqlite3.connect(db)
 
+    smiles = str(input("\nIndicate a SMILES string: ")).replace("\t", "").strip()
     idx1 = -1
     idx2 = -1
 
