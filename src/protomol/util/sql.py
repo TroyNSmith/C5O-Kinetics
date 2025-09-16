@@ -71,13 +71,14 @@ def refresh():
     xyz_ids = get_existing_calc_ids("xyz")
     traj_ids = get_existing_calc_ids("traj")
     imaginary_ids = get_existing_calc_ids("imaginaryfrequencies")
-    calc_ids = get_existing_calc_ids("calculations")
 
     # xyz_ids = []
     # traj_ids = []
     # energy_ids = []
 
-    for calc_id in calc_ids:
+    rows = execute_query("SELECT * FROM calculations", db)
+    for row in rows:
+        calc_id, smiles_id, method_id, idx1, idx2 = row
         workdir = calc_dir / str(calc_id)
 
         # === XYZ Handling ===
@@ -135,7 +136,11 @@ def refresh():
                         # -------- Fallback: Max energy --------
                         return int(np.argmax(energies))
 
-                    ts_idx = identify_ts_index(energies)
+                    if abs(idx1 - idx2) == 1:
+                        ts_idx = len(steps) - 1
+                    else:
+                        ts_idx = identify_ts_index(energies)
+
                     selected_step = steps[ts_idx]
                     step_str = str(selected_step).zfill(3)
                     step_xyz_file = next(workdir.rglob(f"calc.{step_str}.xyz"), None)

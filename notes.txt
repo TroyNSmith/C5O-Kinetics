@@ -1,0 +1,13 @@
+# # # # # # # # #
+#   09.15.2025  #
+# # # # # # # # #
+
+o Changed beta cleavage in mol.py back to original format--generate mol from smiles, calculate min_dist & max_dist, then return values for writing to file.
+
+o Added a check in sql.py to see if idx1 and idx2 are consecutive (indicating beta cleavage) during xyz logging. In this case, we take the final structure from a scan and save it to db.
+
+o Currently testing if REVDSD scan is better for beta cleavage--plan to try optimizing final point & seeing if this will converge.
+
+o Make sure calc hess is true and increase number of points in optimization process for after we've done a scan.
+
+o Decided to use REVDSD for NEB-TS (& separately deal with cases where it does not work).

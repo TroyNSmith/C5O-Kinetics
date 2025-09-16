@@ -10,6 +10,7 @@ from typing import Optional
 
 db = Path.home() / "C5O-Kinetics/db/data.db"
 calc_dir = Path.home() / "C5O-Kinetics/calc"
+conn = sqlite3.connect(db)
 
 
 def write_orca(
@@ -20,9 +21,6 @@ def write_orca(
     idx2: int = -1,
     mechanism: Optional[str] = None,
 ):
-    db = Path.home() / "C5O-Kinetics/db/data.db"
-    conn = sqlite3.connect(db)
-
     # --- Retrieve SMILES entry ---
     df_smiles = pd.read_sql_query(
         "SELECT * FROM smiles WHERE smiles_text = ?",
@@ -104,7 +102,7 @@ def write_orca(
 
         substitutions["[start]"] = min_dist
         substitutions["[end]"] = max_dist
-    
+
     # --- Perform substitutions ---
     for key, val in substitutions.items():
         inp_template = inp_template.replace(key, str(val))

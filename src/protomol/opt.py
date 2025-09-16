@@ -178,10 +178,22 @@ def optimize():
     if "SCAN" in method:
         print("\n  Available Mechanisms")
         print("  " + "=" * 55)
-        print("  1 | Beta Cleavage\n  2 | Proton Transfer")
+        print("  1 | Proton Transfer")
+        print("  2 | Beta Cleavage")
         mechanism_inp = int(input("\nSelect a mechanism: "))
-
         if mechanism_inp == 1:
+            mechanism = "proton transfer"
+            radical_list, proton_list = proton_transfer_indices(smiles)
+
+            idx1 = int(input(f"\nSelect a proton index {proton_list}: "))
+            if idx1 not in proton_list:
+                raise ValueError(f"Index {idx1} is not a valid proton index.")
+
+            idx2 = int(input(f"\nSelect a radical index {radical_list}: "))
+            if idx2 not in radical_list:
+                raise ValueError(f"Index {idx2} is not a valid radical index.")
+
+        elif mechanism_inp == 2:
             mechanism = "beta cleavage"
             alpha_list, beta_list = beta_cleavage_indices(smiles)
 
@@ -198,18 +210,6 @@ def optimize():
                 raise ValueError(
                     f"Index {idx2} is not a valid beta index for beta cleavage."
                 )
-
-        elif mechanism_inp == 2:
-            mechanism = "proton transfer"
-            radical_list, proton_list = proton_transfer_indices(smiles)
-
-            idx1 = int(input(f"\nSelect a proton index {proton_list}: "))
-            if idx1 not in proton_list:
-                raise ValueError(f"Index {idx1} is not a valid proton index.")
-
-            idx2 = int(input(f"\nSelect a radical index {radical_list}: "))
-            if idx2 not in radical_list:
-                raise ValueError(f"Index {idx2} is not a valid radical index.")
 
         else:
             raise ValueError("Select the integer corresponding to a valid mechanism.")
