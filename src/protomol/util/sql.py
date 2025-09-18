@@ -136,10 +136,7 @@ def refresh():
                         # -------- Fallback: Max energy --------
                         return int(np.argmax(energies))
 
-                    if abs(idx1 - idx2) == 1:
-                        ts_idx = len(steps) - 1
-                    else:
-                        ts_idx = identify_ts_index(energies)
+                    ts_idx = identify_ts_index(energies)
 
                     selected_step = steps[ts_idx]
                     step_str = str(selected_step).zfill(3)

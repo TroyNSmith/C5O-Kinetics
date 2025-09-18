@@ -96,7 +96,7 @@ def write_orca(
         if mechanism.lower() == "proton transfer":
             initial_xyz, max_dist, min_dist = intra_proton_transfer(smiles, idx1, idx2)
         elif mechanism.lower() == "beta cleavage":
-            initial_xyz, min_dist, max_dist = beta_cleavage(smiles, idx1, idx2)
+            min_dist, max_dist = beta_cleavage(smiles, idx1, idx2)
         else:
             raise ValueError(f"Unrecognized mechanism {mechanism}")
 

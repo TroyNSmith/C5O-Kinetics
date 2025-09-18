@@ -19,9 +19,10 @@ LEN_DCT = {
 
 METHOD_MAP = {
     "GOAT": ["OPT NumFreq"],
-    "OPT NumFreq": ["CALC", "OPT SCAN", "OPT SCAN (Beta Cleavage)", "OPT SET"],
+    "OPT NumFreq": ["CALC", "OPT SCAN", "OPT SCAN (Beta)", "OPT SET"],
     "OPT SCAN": ["OPTTS NumFreq", "OPT NumFreq"],
     "OPTTS NumFreq": ["CALC"],
+    "OPT SCAN (Beta)": ["OPTTS NumFreq", "OPT NumFreq"],
 }
 
 

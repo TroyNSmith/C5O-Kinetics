@@ -406,18 +406,18 @@ def intra_proton_transfer(smiles: str, idx1: int, idx2: int):
 def beta_cleavage(smiles: str, idx1: int, idx2: int):
     mol_obj = from_smiles(smiles)  # Initialize mol from SMILES string
     mol_obj = with_coordinates(mol_obj)  # Assign initial coordinates to mol
-    bmat = dg_bounds_set_dist(
-        mol_obj, idx1, idx2, 2.0
-    )  # Calculate a new coordinates matrix with the updated idx1:idx2 distance
-    mol_obj = with_coordinates(mol_obj, bmat=bmat)  # Assign new coordinates to output
-    xyz = Chem.MolToXYZBlock(mol_obj)
+    # bmat = dg_bounds_set_dist(
+    #     mol_obj, idx1, idx2, 2.0
+    # )  # Calculate a new coordinates matrix with the updated idx1:idx2 distance
+    # mol_obj = with_coordinates(mol_obj, bmat=bmat)  # Assign new coordinates to output
+    # xyz = Chem.MolToXYZBlock(mol_obj)
     symbols_pair = (
         mol_obj.GetAtomWithIdx(idx1).GetSymbol(),
         mol_obj.GetAtomWithIdx(idx2).GetSymbol(),
     )
     max_dist = 2.00
     min_dist = ref.LEN_DCT[symbols_pair] + 0.05
-    return xyz, min_dist, max_dist
+    return min_dist, max_dist
 
 
 # Helper class for working with the bounds matrix
